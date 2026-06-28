@@ -1,0 +1,10 @@
+{
+  "name": "knowledge-tree",
+  "private": true,
+  "workspaces": ["client"],
+  "scripts": {
+    "client": "npm run dev --workspace=client",
+    "api": "uv run --directory api fastapi dev src/main.py",
+    "build": "npm run build --workspace=client"
+  }
+}
