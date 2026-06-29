@@ -1,3 +1,5 @@
+# Environment variables, hosting platform, and other environment info.
+
 import os
 
 from dotenv import find_dotenv, load_dotenv

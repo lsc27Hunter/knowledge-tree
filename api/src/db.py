@@ -1,3 +1,5 @@
+# Database connection and database session dependency injection.
+
 from typing import Annotated
 from fastapi import Depends
 from sqlalchemy import NullPool

@@ -1,3 +1,5 @@
+# Database models and API schemas.
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -33,7 +35,7 @@ class Card(Base):
 
 # Translates camelCase request fields to snake_case.
 # Translates snake_case response fields to camelCase.
-class Model(BaseModel):
+class APISchema(BaseModel):
   model_config = ConfigDict(
     alias_generator=to_camel,
     validate_by_alias=True, # Allow alias as keyword argument
@@ -41,7 +43,7 @@ class Model(BaseModel):
     from_attributes=True,
   )
 
-class DeckListResponse(Model):
+class DeckListResponse(APISchema):
   id: int
   name: str
   mastery: int
@@ -49,16 +51,16 @@ class DeckListResponse(Model):
   total_cards: int
   last_studied_at: datetime | None
 
-class DeckCreate(Model):
+class DeckCreate(APISchema):
   name: str
   description: str
 
-class DeckCreateResponse(Model):
+class DeckCreateResponse(APISchema):
   id: int
   name: str
   description: str
 
-class DeckGetResponse(Model):
+class DeckGetResponse(APISchema):
   id: int
   name: str
   mastery: int
@@ -66,33 +68,33 @@ class DeckGetResponse(Model):
   total_cards: int
   retention_rate: int
 
-class DeckDeleteResponse(Model):
+class DeckDeleteResponse(APISchema):
   success: bool
 
-class CardListResponse(Model):
+class CardListResponse(APISchema):
   id: int
   question: str
   answer: str
   mastery_score: int
   next_review_date: datetime
 
-class CardCreate(Model):
+class CardCreate(APISchema):
   question: str
   answer: str
 
-class CardCreateResponse(Model):
+class CardCreateResponse(APISchema):
   id: int
   question: str
   answer: str
 
-class CardUpdate(Model):
+class CardUpdate(APISchema):
   question: str | None = None
   answer: str | None = None
 
-class CardUpdateResponse(Model):
+class CardUpdateResponse(APISchema):
   id: int
   question: str
   answer: str
 
-class CardDeleteResponse(Model):
+class CardDeleteResponse(APISchema):
   success: bool
