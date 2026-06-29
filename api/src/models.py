@@ -1,8 +1,35 @@
 from datetime import datetime
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
-from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
+
+class Base(MappedAsDataclass, DeclarativeBase):
+  pass
+
+class Deck(Base):
+  __tablename__ = "deck"
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  user_id: Mapped[str]
+  name: Mapped[str]
+  description: Mapped[str]
+  last_studied_at: Mapped[Optional[datetime]]
+  cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
+
+class Card(Base):
+  __tablename__ = "card"
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  deck_id: Mapped[int] = mapped_column(ForeignKey("deck.id", ondelete="CASCADE"))
+  question: Mapped[str]
+  answer: Mapped[str]
+  n: Mapped[int]
+  ef: Mapped[float]
+  i: Mapped[int]
+  deck: Mapped["Deck"] = relationship(default=None, back_populates="cards")
 
 # Translates camelCase request fields to snake_case.
 # Translates snake_case response fields to camelCase.
@@ -13,14 +40,6 @@ class Model(BaseModel):
     validate_by_name=True, # Allow real name as keyword argument
     from_attributes=True,
   )
-
-class Deck(SQLModel, table=True):
-  id: int | None = Field(default=None, primary_key=True)
-  user_id: str
-  name: str
-  description: str
-  last_studied_at: datetime | None
-  cards: list["Card"] = Relationship(back_populates="deck", passive_deletes=True)
 
 class DeckListResponse(Model):
   id: int
@@ -49,16 +68,6 @@ class DeckGetResponse(Model):
 
 class DeckDeleteResponse(Model):
   success: bool
-
-class Card(SQLModel, table=True):
-  id: int | None = Field(default=None, primary_key=True)
-  deck_id: int = Field(foreign_key="deck.id", ondelete="CASCADE")
-  question: str
-  answer: str
-  n: int
-  ef: float
-  i: int
-  deck: Deck = Relationship(back_populates="cards")
 
 class CardListResponse(Model):
   id: int

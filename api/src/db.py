@@ -1,12 +1,12 @@
 from typing import Annotated
 from fastapi import Depends
 from sqlalchemy import NullPool
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from env import db_url, on_vercel
 
 if on_vercel:
+  # Can't use connection pooling in Vercel's serverless environment.
   connect_args={
     "prepared_statement_cache_size": 0,
   }
