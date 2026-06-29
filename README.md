@@ -7,7 +7,6 @@
 ### Packages
 - asyncpg - postgres database driver
 - sqlalchemy - ORM
-- sqlmodel - plugs data validation into sqlalchemy models
 - alembic - migrations
 
 ### Adding a package

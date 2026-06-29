@@ -29,7 +29,7 @@ class Card(Base):
   n: Mapped[int]
   ef: Mapped[float]
   i: Mapped[int]
-  deck: Mapped["Deck"] = relationship(default=None, back_populates="cards")
+  deck: Mapped["Deck"] = relationship(back_populates="cards", init=False)
 
 # Translates camelCase request fields to snake_case.
 # Translates snake_case response fields to camelCase.

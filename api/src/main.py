@@ -4,7 +4,7 @@ from typing import Any, cast
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import CursorResult, delete, select
 from db import SessionDep
-from models import Card, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse
+from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse
 
 app = FastAPI(
   docs_url='/api/docs',
@@ -69,6 +69,25 @@ async def delete_deck(deck_id: int, session: SessionDep):
   await session.commit()
   return DeckDeleteResponse(success=cast(CursorResult[Any], result).rowcount > 0)
 
+@app.post("/api/decks/{deck_id}/cards", response_model=CardCreateResponse)
+async def create_card(deck_id: int, card: CardCreate, session: SessionDep):
+  db_card = Card(
+    deck_id=deck_id,
+    question=card.question,
+    answer=card.answer,
+    n=0,
+    ef=0,
+    i=0,
+  )
+  session.add(db_card)
+  await session.commit()
+  await session.refresh(db_card)
+  return CardCreateResponse(
+    id=db_card.id,
+    question=db_card.question,
+    answer=db_card.answer,
+  )
+
 @app.get("/api/decks/{deck_id}/cards", response_model=list[CardListResponse])
 async def get_cards(deck_id: int, session: SessionDep):
   cards = (await session.execute(select(Card).where(Card.deck_id == deck_id))).scalars().all()
@@ -82,7 +101,7 @@ async def get_cards(deck_id: int, session: SessionDep):
     ) for card in cards
   ]
 
-@app.patch("/api/cards/{card_id}", response_model=list[CardUpdateResponse])
+@app.patch("/api/cards/{card_id}", response_model=CardUpdateResponse)
 async def update_card(card_id: int, card: CardUpdate, session: SessionDep):
   db_card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
   if not db_card:
