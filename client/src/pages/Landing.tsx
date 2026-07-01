@@ -15,7 +15,12 @@ const LandingPage: React.FC = () => {
       </div>
 
       <div className="mt-8 px-6 sm:px-10 md:px-16 lg:px-25">
-        <Button text="Start Studying" width="fit" icon={ArrowRight} />
+        <Button
+          text="Start Studying"
+          width="fit"
+          icon={ArrowRight}
+          to="/register"
+        />
       </div>
     </div>
   );

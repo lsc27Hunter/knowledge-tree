@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "./Button";
 
 interface NavbarProps {
-  version: string;
+  version: "Landing" | "Dashboard" | "Blank";
 }
 
 export function Navbar({ version }: NavbarProps) {
@@ -20,15 +20,17 @@ export function Navbar({ version }: NavbarProps) {
             width="fit"
             color="background"
             textColor="primary-light-grey"
+            to="/login"
           />
           <Button
             text="Get Started"
             width="fit"
             color="accent"
             textColor="white"
+            to="/register"
           />
         </div>
-      ) : (
+      ) : version === "Dashboard" ? (
         <div className="flex gap-4 ml-auto">
           <Button
             text="Upload Deck"
@@ -37,7 +39,7 @@ export function Navbar({ version }: NavbarProps) {
             textColor="white"
           />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

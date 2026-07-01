@@ -1,9 +1,12 @@
+import { useNavigate } from "react-router-dom";
+
 interface ButtonProps {
   text: string;
   width?: "fit" | "full";
   color?: "accent" | "background";
   textColor?: "white" | "primary-light-grey";
   icon?: string;
+  to?: string;
 }
 
 export function Button({
@@ -12,6 +15,7 @@ export function Button({
   color = "accent",
   textColor = "white",
   icon,
+  to,
 }: ButtonProps) {
   const bgClasses = {
     accent: "bg-accent",
@@ -28,8 +32,13 @@ export function Button({
     full: "w-full",
   };
 
+  const navigate = useNavigate();
+
   return (
     <button
+      onClick={() => {
+        if (to) navigate(to);
+      }}
       className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} py-2 px-4 rounded flex items-center gap-2`}
     >
       {text}
