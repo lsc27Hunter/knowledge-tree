@@ -1,11 +1,29 @@
 import React from "react";
 
 import { Navbar } from "../components/ui/Navbar";
+import { Button } from "../components/ui/Button";
 
 const LoginPage: React.FC = () => {
   return (
-    <div>
+    <div className="min-h-screen">
       <Navbar version="Blank" />
+
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-80px)] gap-4">
+        <h1 className="font-inter text-white text-title-large">Sign in</h1>
+
+        <div className="flex items-center">
+          <span className="text-primary-light-grey">
+            Don't have an account?
+          </span>
+
+          <Button
+            text="Register"
+            color="background"
+            textColor="accent"
+            to="/register"
+          />
+        </div>
+      </div>
     </div>
   );
 };

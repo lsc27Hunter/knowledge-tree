@@ -4,7 +4,7 @@ interface ButtonProps {
   text: string;
   width?: "fit" | "full";
   color?: "accent" | "background";
-  textColor?: "white" | "primary-light-grey";
+  textColor?: "white" | "primary-light-grey" | "accent";
   icon?: string;
   to?: string;
 }
@@ -25,6 +25,7 @@ export function Button({
   const textClasses = {
     white: "text-white",
     "primary-light-grey": "text-primary-light-grey",
+    accent: "text-accent",
   };
 
   const widthClasses = {
