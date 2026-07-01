@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 interface ButtonProps {
   text: string;
   width?: "fit" | "full";
-  color?: "accent" | "background";
+  color?: "accent" | "background" | "white";
   textColor?: "white" | "primary-light-grey" | "accent";
   icon?: string;
+  iconPosition?: "left" | "right";
   to?: string;
 }
 
@@ -15,11 +16,13 @@ export function Button({
   color = "accent",
   textColor = "white",
   icon,
+  iconPosition = "right",
   to,
 }: ButtonProps) {
   const bgClasses = {
     accent: "bg-accent",
     background: "bg-background",
+    white: "bg-white",
   };
 
   const textClasses = {
@@ -42,8 +45,15 @@ export function Button({
       }}
       className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} py-2 px-4 rounded flex items-center gap-2`}
     >
+      {icon && iconPosition === "left" && (
+        <img src={icon} alt="" className="w-4 h-4" />
+      )}
+
       {text}
-      {icon && <img src={icon} alt="" className="w-4 h-4" />}
+
+      {icon && iconPosition === "right" && (
+        <img src={icon} alt="" className="w-4 h-4" />
+      )}
     </button>
   );
 }
