@@ -1,4 +1,5 @@
 import { Logo } from "./Logo";
+import { Link } from "react-router-dom";
 import { Button } from "./Button";
 
 interface NavbarProps {
@@ -8,7 +9,9 @@ interface NavbarProps {
 export function Navbar({ version }: NavbarProps) {
   return (
     <div className="sticky top-0 z-50 flex w-full bg-background/95 p-4 border-b border-primary-grey backdrop-blur">
-      <Logo />
+      <Link to="/" aria-label="Go to home">
+        <Logo />
+      </Link>
 
       {version === "Landing" ? (
         <div className="flex gap-4 ml-auto">
@@ -28,7 +31,7 @@ export function Navbar({ version }: NavbarProps) {
       ) : (
         <div className="flex gap-4 ml-auto">
           <Button
-            text="Dashboard Action"
+            text="Upload Deck"
             width="fit"
             color="accent"
             textColor="white"

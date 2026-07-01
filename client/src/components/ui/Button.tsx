@@ -1,16 +1,36 @@
 interface ButtonProps {
   text: string;
-  width?: string;
-  color?: string;
-  textColor?: string;
+  width?: "fit" | "full";
+  color?: "accent" | "background";
+  textColor?: "white" | "primary-light-grey";
 }
 
-export function Button({ text, width, color, textColor }: ButtonProps) {
+export function Button({
+  text,
+  width = "fit",
+  color = "accent",
+  textColor = "white",
+}: ButtonProps) {
+  const bgClasses = {
+    accent: "bg-accent",
+    background: "bg-background",
+  };
+
+  const textClasses = {
+    white: "text-white",
+    "primary-light-grey": "text-primary-light-grey",
+  };
+
+  const widthClasses = {
+    fit: "w-fit",
+    full: "w-full",
+  };
+
   return (
-    <div
-      className={`bg-${color ? color : "accent"} text-${textColor ? textColor : "white"} py-2 px-4 rounded ${width ? `w-${width}` : "w-fit"}`}
+    <button
+      className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} py-2 px-4 rounded`}
     >
       {text}
-    </div>
+    </button>
   );
 }
