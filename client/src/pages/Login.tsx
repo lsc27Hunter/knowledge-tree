@@ -5,6 +5,8 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 
 import GoogleIcon from "../assets/google-icon.svg";
+import Email from "../assets/email.svg";
+import Password from "../assets/password.svg";
 
 const LoginPage: React.FC = () => {
   return (
@@ -27,12 +29,16 @@ const LoginPage: React.FC = () => {
           width="full"
           color="background"
           textColor="white"
+          icon={Email}
+          iconPosition="left"
         />
         <Input
           placeholderText="Password"
           width="full"
           color="background"
           textColor="white"
+          icon={Password}
+          iconPosition="left"
         />
 
         <Button text="Login" color="accent" textColor="white" to="/dashboard" />

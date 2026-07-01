@@ -19,7 +19,7 @@ const LandingPage: React.FC = () => {
           text="Start Studying"
           width="fit"
           icon={ArrowRight}
-          to="/register"
+          to="/login"
         />
       </div>
     </div>
