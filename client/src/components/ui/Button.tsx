@@ -7,6 +7,7 @@ interface ButtonProps {
   textColor?: "white" | "primary-light-grey" | "accent";
   icon?: string;
   iconPosition?: "left" | "right";
+  iconSize?: string;
   to?: string;
 }
 
@@ -17,6 +18,7 @@ export function Button({
   textColor = "white",
   icon,
   iconPosition = "right",
+  iconSize = "w-4 h-4",
   to,
 }: ButtonProps) {
   const bgClasses = {
@@ -46,13 +48,13 @@ export function Button({
       className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} py-2 px-4 rounded flex items-center gap-2`}
     >
       {icon && iconPosition === "left" && (
-        <img src={icon} alt="" className="w-4 h-4" />
+        <img src={icon} alt="" className={iconSize} />
       )}
 
       {text}
 
       {icon && iconPosition === "right" && (
-        <img src={icon} alt="" className="w-4 h-4" />
+        <img src={icon} alt="" className={iconSize} />
       )}
     </button>
   );

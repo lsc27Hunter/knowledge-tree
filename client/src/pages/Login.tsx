@@ -2,6 +2,7 @@ import React from "react";
 
 import { Navbar } from "../components/ui/Navbar";
 import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
 
 import GoogleIcon from "../assets/google-icon.svg";
 
@@ -21,6 +22,20 @@ const LoginPage: React.FC = () => {
           iconPosition="left"
         />
         <h2 className="font-inter text-primary-light-grey text-regular">OR</h2>
+        <Input
+          placeholderText="Email"
+          width="full"
+          color="background"
+          textColor="white"
+        />
+        <Input
+          placeholderText="Password"
+          width="full"
+          color="background"
+          textColor="white"
+        />
+
+        <Button text="Login" color="accent" textColor="white" to="/dashboard" />
         <div className="flex items-center">
           <span className="text-primary-light-grey">
             Don't have an account?

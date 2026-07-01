@@ -2,6 +2,9 @@ import { Logo } from "./Logo";
 import { Link } from "react-router-dom";
 import { Button } from "./Button";
 
+import UploadIcon from "../../assets/upload-file.svg";
+import Person from "../../assets/PersonIcon.svg";
+
 interface NavbarProps {
   version: "Landing" | "Dashboard" | "Blank";
 }
@@ -37,6 +40,17 @@ export function Navbar({ version }: NavbarProps) {
             width="fit"
             color="accent"
             textColor="white"
+            icon={UploadIcon}
+            iconPosition="right"
+          />
+          <Button
+            text=""
+            width="fit"
+            color="background"
+            textColor="primary-light-grey"
+            icon={Person}
+            iconPosition="right"
+            iconSize="w-8 h-8"
           />
         </div>
       ) : null}
