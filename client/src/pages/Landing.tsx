@@ -4,6 +4,8 @@ import { Navbar } from "../components/ui/Navbar";
 import { About } from "../components/ui/About";
 import { Button } from "../components/ui/Button";
 
+import ArrowRight from "../assets/arrow-right.svg";
+
 const LandingPage: React.FC = () => {
   return (
     <div>
@@ -13,7 +15,7 @@ const LandingPage: React.FC = () => {
       </div>
 
       <div className="mt-8 px-6 sm:px-10 md:px-16 lg:px-25">
-        <Button text="Start Studying" width="fit" />
+        <Button text="Start Studying" width="fit" icon={ArrowRight} />
       </div>
     </div>
   );

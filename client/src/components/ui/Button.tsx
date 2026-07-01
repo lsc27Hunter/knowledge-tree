@@ -3,6 +3,7 @@ interface ButtonProps {
   width?: "fit" | "full";
   color?: "accent" | "background";
   textColor?: "white" | "primary-light-grey";
+  icon?: string;
 }
 
 export function Button({
@@ -10,6 +11,7 @@ export function Button({
   width = "fit",
   color = "accent",
   textColor = "white",
+  icon,
 }: ButtonProps) {
   const bgClasses = {
     accent: "bg-accent",
@@ -28,9 +30,10 @@ export function Button({
 
   return (
     <button
-      className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} py-2 px-4 rounded`}
+      className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} py-2 px-4 rounded flex items-center gap-2`}
     >
       {text}
+      {icon && <img src={icon} alt="" className="w-4 h-4" />}
     </button>
   );
 }
