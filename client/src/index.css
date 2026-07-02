@@ -16,11 +16,15 @@
   --font-jetbrains: "JetBrains Mono", sans-serif;
 
   /* Text */
-  --text-title: 1.5625rem;
-  --text-title-large: 4rem;
+
+  --text-title-small: 1.5625rem;
+  --text-title-medium: 2.25rem;
+  --text-title-large: 2.5rem;
+  --text-title-xl: 4rem;
   --text-about: 3.75rem;
   --text-about-2: 2.19rem;
   --text-regular: 1.5rem;
+  --text-small: 1rem;
 
   /* Radius */
   --radius-card: 1rem;

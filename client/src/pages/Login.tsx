@@ -14,7 +14,7 @@ const LoginPage: React.FC = () => {
       <Navbar version="Blank" />
 
       <div className="flex flex-col items-center justify-center h-[calc(100vh-80px)] gap-4">
-        <h1 className="font-inter text-white text-title-large">Sign in</h1>
+        <h1 className="font-inter text-white text-title-xl">Sign in</h1>
         <Button
           text="Continue with Google"
           color="white"
