@@ -1,3 +1,4 @@
 .env*
 .vscode
+.vsls.json
 node_modules

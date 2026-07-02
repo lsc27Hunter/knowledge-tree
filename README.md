@@ -1,7 +1,10 @@
 ## Run
-`npm run api`
-
-`npm run client`
+```
+npm run api
+```
+```
+npm run client
+```
 
 ## Backend API
 ### Packages
@@ -14,6 +17,25 @@
 cd api
 uv add <package>
 ```
+
+### Migrations
+Generate a migration:
+```
+cd api
+uv run alembic revision --autogenerate -m <migration-name>
+```
+Be sure to inspect the generated migration file in `api/alembic/versions`.
+Then apply the migration:
+```
+uv run alembic upgrade head
+```
+Or undo:
+```
+uv run alembic downgrade -1
+```
+After undoing a migration, you can delete the migration file.
+
+Migration files must be committed.
 
 ## Start both servers
 Cmd/Ctrl + Shift + B to start both servers after adding this `.vscode/tasks.json`:
