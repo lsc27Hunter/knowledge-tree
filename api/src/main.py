@@ -3,6 +3,7 @@ from typing import Any, cast
 
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import CursorResult, delete, select
+from auth import CurrentUserId
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse
 
@@ -18,9 +19,13 @@ app = FastAPI(
 async def root():
   return {"message": "Hello World"}
 
+@app.get("/api/me")
+async def get_me(user_id: CurrentUserId):
+  return {"userId": user_id}
+
 @app.get("/api/decks", response_model=list[DeckListResponse])
-async def get_decks(session: SessionDep):
-  decks = (await session.execute(select(Deck))).scalars().all()
+async def get_decks(session: SessionDep, user_id: CurrentUserId):
+  decks = (await session.execute(select(Deck).where(Deck.user_id == user_id))).scalars().all()
   return [
     DeckListResponse(
       id=deck.id,
@@ -33,9 +38,9 @@ async def get_decks(session: SessionDep):
   ]
 
 @app.post("/api/decks", response_model=DeckCreateResponse)
-async def create_deck(deck: DeckCreate, session: SessionDep):
+async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUserId):
   db_deck = Deck(
-    user_id="marcorubio",
+    user_id=user_id,
     name=deck.name,
     description=deck.description,
     last_studied_at=None,
@@ -50,9 +55,9 @@ async def create_deck(deck: DeckCreate, session: SessionDep):
   )
 
 @app.get("/api/decks/{deck_id}", response_model=DeckGetResponse)
-async def get_deck(deck_id: int, session: SessionDep):
+async def get_deck(deck_id: int, session: SessionDep, user_id: CurrentUserId):
   deck = await session.get(Deck, deck_id)
-  if not deck:
+  if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
   return DeckGetResponse(
     id=deck.id,
@@ -64,13 +69,19 @@ async def get_deck(deck_id: int, session: SessionDep):
   )
 
 @app.delete("/api/decks/{deck_id}", response_model=DeckDeleteResponse)
-async def delete_deck(deck_id: int, session: SessionDep):
+async def delete_deck(deck_id: int, session: SessionDep, user_id: CurrentUserId):
+  deck = await session.get(Deck, deck_id)
+  if not deck or deck.user_id != user_id:
+    raise HTTPException(status_code=404, detail="Deck not found")
   result = await session.execute(delete(Deck).where(Deck.id == deck_id))
   await session.commit()
   return DeckDeleteResponse(success=cast(CursorResult[Any], result).rowcount > 0)
 
 @app.post("/api/decks/{deck_id}/cards", response_model=CardCreateResponse)
-async def create_card(deck_id: int, card: CardCreate, session: SessionDep):
+async def create_card(deck_id: int, card: CardCreate, session: SessionDep, user_id: CurrentUserId):
+  deck = await session.get(Deck, deck_id)
+  if not deck or deck.user_id != user_id:
+    raise HTTPException(status_code=404, detail="Deck not found")
   db_card = Card(
     deck_id=deck_id,
     question=card.question,
@@ -89,7 +100,10 @@ async def create_card(deck_id: int, card: CardCreate, session: SessionDep):
   )
 
 @app.get("/api/decks/{deck_id}/cards", response_model=list[CardListResponse])
-async def get_cards(deck_id: int, session: SessionDep):
+async def get_cards(deck_id: int, session: SessionDep, user_id: CurrentUserId):
+  deck = await session.get(Deck, deck_id)
+  if not deck or deck.user_id != user_id:
+    raise HTTPException(status_code=404, detail="Deck not found")
   cards = (await session.execute(select(Card).where(Card.deck_id == deck_id))).scalars().all()
   return [
     CardListResponse(
@@ -102,9 +116,12 @@ async def get_cards(deck_id: int, session: SessionDep):
   ]
 
 @app.patch("/api/cards/{card_id}", response_model=CardUpdateResponse)
-async def update_card(card_id: int, card: CardUpdate, session: SessionDep):
+async def update_card(card_id: int, card: CardUpdate, session: SessionDep, user_id: CurrentUserId):
   db_card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
   if not db_card:
+    raise HTTPException(status_code=404, detail="Card not found")
+  deck = await session.get(Deck, db_card.deck_id)
+  if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Card not found")
   updated_fields = card.model_dump(exclude_unset=True)
   for key, value in updated_fields.items():
@@ -118,7 +135,13 @@ async def update_card(card_id: int, card: CardUpdate, session: SessionDep):
   )
 
 @app.delete("/api/cards/{card_id}", response_model=CardDeleteResponse)
-async def delete_card(card_id: int, session: SessionDep):
+async def delete_card(card_id: int, session: SessionDep, user_id: CurrentUserId):
+  db_card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
+  if not db_card:
+    raise HTTPException(status_code=404, detail="Card not found")
+  deck = await session.get(Deck, db_card.deck_id)
+  if not deck or deck.user_id != user_id:
+    raise HTTPException(status_code=404, detail="Card not found")
   result = await session.execute(delete(Card).where(Card.id == card_id))
   await session.commit()
   return CardDeleteResponse(success=cast(CursorResult[Any], result).rowcount > 0)
