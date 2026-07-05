@@ -1,7 +1,10 @@
 ## Run
-`npm run api`
-
-`npm run client`
+```
+npm run api
+```
+```
+npm run client
+```
 
 ## Backend API
 ### Packages
@@ -15,7 +18,7 @@ cd api
 uv add <package>
 ```
 
-### Database (Supabase)
+### Database (Supabase) connection
 
 **Local `.env.local`** — use the **Session pooler** string (IPv4), not Direct connection:
 
@@ -29,12 +32,29 @@ Direct connection (`db.[project-ref].supabase.co`) is IPv6-only. On most home/ca
 
 **Vercel prod** — keep the **Transaction pooler** string (port `6543`) in Vercel env vars.
 
+### Run migrations
 Run migrations locally:
 
 ```
 cd api
 uv run alembic upgrade head
 ```
+
+Undo:
+
+```
+uv run alembic downgrade -1
+```
+You can delete an unwanted migration file after downgrading.
+
+### Generate a new migration
+```
+cd api
+uv run alembic revision --autogenerate -m <migration-name>
+```
+**Inspect the generated migration file in `api/alembic/versions` before running it.**
+
+Migration files must be committed.
 
 ## Start both servers
 Cmd/Ctrl + Shift + B to start both servers after adding this `.vscode/tasks.json`:
