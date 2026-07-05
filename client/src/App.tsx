@@ -13,7 +13,7 @@ function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/study" element={<StudyPage />} />
+        <Route path="/study/:deckId" element={<StudyPage />} />
       </Routes>
     </div>
   );
