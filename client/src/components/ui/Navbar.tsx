@@ -1,15 +1,16 @@
+import type { ReactNode } from "react";
 import { Logo } from "./Logo";
 import { Link } from "react-router-dom";
 import { Button } from "./Button";
 
 import UploadIcon from "../../assets/upload-file.svg";
-import Person from "../../assets/PersonIcon.svg";
 
 interface NavbarProps {
   version: "Landing" | "Dashboard" | "Blank";
+  userButton?: ReactNode;
 }
 
-export function Navbar({ version }: NavbarProps) {
+export function Navbar({ version, userButton }: NavbarProps) {
   return (
     <div className="sticky top-0 z-50 flex w-full bg-background/95 p-4 border-b border-primary-grey backdrop-blur">
       <Link to="/" aria-label="Go to home">
@@ -23,18 +24,18 @@ export function Navbar({ version }: NavbarProps) {
             width="fit"
             color="background"
             textColor="primary-light-grey"
-            to="/login"
+            to="/sign-in"
           />
           <Button
             text="Get Started"
             width="fit"
             color="accent"
             textColor="white"
-            to="/register"
+            to="/sign-up"
           />
         </div>
       ) : version === "Dashboard" ? (
-        <div className="flex gap-4 ml-auto">
+        <div className="flex gap-4 ml-auto items-center">
           <Button
             text="Upload Deck"
             width="fit"
@@ -43,15 +44,7 @@ export function Navbar({ version }: NavbarProps) {
             icon={UploadIcon}
             iconPosition="right"
           />
-          <Button
-            text=""
-            width="fit"
-            color="background"
-            textColor="primary-light-grey"
-            icon={Person}
-            iconPosition="right"
-            iconSize="w-8 h-8"
-          />
+          {userButton}
         </div>
       ) : null}
     </div>
