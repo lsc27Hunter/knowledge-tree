@@ -1,8 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import LandingPage from "./pages/Landing";
 import DashboardPage from "./pages/Dashboard";
-import LoginPage from "./pages/Login";
-import RegisterPage from "./pages/Register";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import StudyPage from "./pages/Study";
 
 function App() {
@@ -10,10 +9,10 @@ function App() {
     <div className="bg-background min-h-screen">
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/study/:deckId" element={<StudyPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/study/:deckId" element={<StudyPage />} />
+        </Route>
       </Routes>
     </div>
   );

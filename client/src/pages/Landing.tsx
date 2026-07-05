@@ -1,4 +1,5 @@
-import React from "react";
+import { useAuth } from "@clerk/react";
+import { useNavigate } from "react-router-dom";
 
 import { Navbar } from "../components/ui/Navbar";
 import { About } from "../components/ui/About";
@@ -6,7 +7,10 @@ import { Button } from "../components/ui/Button";
 
 import ArrowRight from "../assets/arrow-right.svg";
 
-const LandingPage: React.FC = () => {
+export default function LandingPage() {
+  const { isSignedIn } = useAuth();
+  const navigate = useNavigate();
+
   return (
     <div>
       <Navbar version="Landing" />
@@ -19,11 +23,9 @@ const LandingPage: React.FC = () => {
           text="Start Studying"
           width="fit"
           icon={ArrowRight}
-          to="/login"
+          onClick={() => navigate(isSignedIn ? "/dashboard" : "/sign-in")}
         />
       </div>
     </div>
   );
-};
-
-export default LandingPage;
+}

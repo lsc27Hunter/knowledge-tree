@@ -18,22 +18,41 @@ cd api
 uv add <package>
 ```
 
-### Migrations
-Generate a migration:
+### Database (Supabase) connection
+
+**Local `.env.local`** — use the **Session pooler** string (IPv4), not Direct connection:
+
+```
+DATABASE_URL="postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres"
+```
+
+Get it from Supabase Dashboard → **Connect** → **Session pooler** → URI.
+
+Direct connection (`db.[project-ref].supabase.co`) is IPv6-only. On most home/campus Wi‑Fi you will get `getaddrinfo failed` — that is a network issue, not a bad password.
+
+**Vercel prod** — keep the **Transaction pooler** string (port `6543`) in Vercel env vars.
+
+### Run migrations
+Run migrations locally:
+
+```
+cd api
+uv run alembic upgrade head
+```
+
+Undo:
+
+```
+uv run alembic downgrade -1
+```
+You can delete an unwanted migration file after downgrading.
+
+### Generate a new migration
 ```
 cd api
 uv run alembic revision --autogenerate -m <migration-name>
 ```
-Be sure to inspect the generated migration file in `api/alembic/versions`.
-Then apply the migration:
-```
-uv run alembic upgrade head
-```
-Or undo:
-```
-uv run alembic downgrade -1
-```
-After undoing a migration, you can delete the migration file.
+**Inspect the generated migration file in `api/alembic/versions` before running it.**
 
 Migration files must be committed.
 
