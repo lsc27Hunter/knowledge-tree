@@ -2,6 +2,10 @@ import { UserButton } from "@clerk/react";
 
 import { Navbar } from "../components/ui/Navbar";
 
+import Checkmark from "../assets/checkmark-circle.svg";
+import StarBadge from "../assets/star-badge.svg";
+import Danger from "../assets/danger.svg";
+
 export default function DashboardPage() {
   return (
     <div>
