@@ -1,6 +1,6 @@
 import { UserButton, useUser } from "@clerk/react";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Navbar } from "../components/ui/Navbar";
 import { DeckCard } from "../components/ui/DeckCard";
@@ -12,6 +12,29 @@ import Danger from "../assets/danger.svg";
 export default function DashboardPage() {
   const { isLoaded, user } = useUser();
   const [sortingOption, setSortingOption] = useState("Due Date");
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  const sortingOptions = ["Due Date", "Mastery", "Last Studied"];
+
+  useEffect(() => {
+    const closeMenuOnOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (
+        sortMenuRef.current &&
+        !sortMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsSortMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeMenuOnOutsideClick);
+    document.addEventListener("touchstart", closeMenuOnOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", closeMenuOnOutsideClick);
+      document.removeEventListener("touchstart", closeMenuOnOutsideClick);
+    };
+  }, []);
 
   if (!isLoaded) {
     return (
@@ -114,7 +137,7 @@ export default function DashboardPage() {
     <div>
       <Navbar version="Dashboard" userButton={<UserButton />} />
 
-      <h2 className="font-inter text-white text-title-medium font-medium mx-15 mt-15">
+      <h2 className="font-inter text-white text-title-medium font-medium mx-15 mt-15 sm:text-regular">
         {userData.userFirstName
           ? `${userData.userFirstName}'s decks`
           : "My decks"}
@@ -166,18 +189,41 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      <label htmlFor="sortingOptions" className="mx-15 mt-2 flex justify-end">
-        <select
-          id="sortingOptions"
-          className="rounded-lg bg-background p-2 text-white focus:outline-none focus:ring-2 focus:ring-accent mx-2"
-          value={sortingOption}
-          onChange={(e) => setSortingOption(e.target.value)}
-        >
-          <option value="Due Date">Sort by Due Date</option>
-          <option value="Mastery">Sort by Mastery</option>
-          <option value="Last Studied">Sort by Last Studied</option>
-        </select>
-      </label>
+      <div className="mx-4 mt-2 flex justify-center sm:mx-15 sm:justify-end">
+        <div className="relative" ref={sortMenuRef}>
+          <button
+            type="button"
+            className="rounded-lg bg-background px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-accent"
+            aria-haspopup="menu"
+            aria-expanded={isSortMenuOpen}
+            onClick={() => setIsSortMenuOpen((open) => !open)}
+          >
+            Sort by {sortingOption} v
+          </button>
+
+          {isSortMenuOpen ? (
+            <div
+              role="menu"
+              className="absolute left-1/2 top-full z-40 mt-2 w-48 -translate-x-1/2 rounded-lg border border-primary-grey bg-background p-1 shadow-lg sm:left-auto sm:right-0 sm:translate-x-0"
+            >
+              {sortingOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="menuitem"
+                  className="block w-full rounded-md px-3 py-2 text-left text-white hover:bg-primary-grey"
+                  onClick={() => {
+                    setSortingOption(option);
+                    setIsSortMenuOpen(false);
+                  }}
+                >
+                  Sort by {option}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
       <div className="mx-15 mt-15 grid grid-cols-1 gap-15 md:grid-cols-2 xl:grid-cols-3">
         {decks.map((deck) => (
           <DeckCard key={deck.id} deckData={deck} />

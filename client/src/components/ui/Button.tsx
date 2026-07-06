@@ -8,6 +8,8 @@ interface ButtonProps {
   icon?: string;
   iconPosition?: "left" | "right";
   iconSize?: string;
+  iconOnlyOnMobile?: boolean;
+  ariaLabel?: string;
   to?: string;
   onClick?: () => void;
 }
@@ -20,6 +22,8 @@ export function Button({
   icon,
   iconPosition = "right",
   iconSize = "w-4 h-4",
+  iconOnlyOnMobile = false,
+  ariaLabel,
   to,
   onClick,
 }: ButtonProps) {
@@ -52,13 +56,16 @@ export function Button({
           navigate(to);
         }
       }}
-      className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} py-2 px-4 rounded flex items-center justify-center gap-2`}
+      aria-label={iconOnlyOnMobile ? (ariaLabel ?? text) : undefined}
+      className={`${bgClasses[color]} ${textClasses[textColor]} ${widthClasses[width]} ${iconOnlyOnMobile ? "p-2 sm:px-4 sm:py-2" : "py-2 px-4"} rounded flex items-center justify-center gap-2`}
     >
       {icon && iconPosition === "left" && (
         <img src={icon} alt="" className={iconSize} />
       )}
 
-      {text}
+      <span className={iconOnlyOnMobile ? "hidden sm:inline" : undefined}>
+        {text}
+      </span>
 
       {icon && iconPosition === "right" && (
         <img src={icon} alt="" className={iconSize} />
