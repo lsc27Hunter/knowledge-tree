@@ -11,14 +11,22 @@ interface NavbarProps {
 }
 
 export function Navbar({ version, userButton }: NavbarProps) {
+  const isLanding = version === "Landing";
+
   return (
-    <div className="sticky top-0 z-50 flex w-full bg-background/95 p-4 border-b border-primary-grey backdrop-blur">
-      <Link to="/" aria-label="Go to home">
+    <div
+      className={`sticky top-0 z-50 flex w-full gap-3 border-b border-primary-grey bg-background/95 p-4 backdrop-blur ${isLanding ? "flex-col items-center sm:flex-row" : "flex-wrap items-center"}`}
+    >
+      <Link
+        to="/"
+        aria-label="Go to home"
+        className="flex shrink-0 items-center"
+      >
         <Logo />
       </Link>
 
       {version === "Landing" ? (
-        <div className="flex gap-4 ml-auto">
+        <div className="flex w-full flex-wrap items-center justify-center gap-3 sm:ml-auto sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-4">
           <Button
             text="Sign In"
             width="fit"
@@ -35,7 +43,7 @@ export function Navbar({ version, userButton }: NavbarProps) {
           />
         </div>
       ) : version === "Dashboard" ? (
-        <div className="flex gap-4 ml-auto items-center">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap sm:gap-4">
           <Button
             text="Upload Deck"
             width="fit"
@@ -43,6 +51,7 @@ export function Navbar({ version, userButton }: NavbarProps) {
             textColor="white"
             icon={UploadIcon}
             iconPosition="right"
+            iconOnlyOnMobile
           />
           {userButton}
         </div>
