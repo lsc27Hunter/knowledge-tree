@@ -36,6 +36,7 @@ body {
   --text-about-2: 2.19rem;
   --text-regular: 1.5rem;
   --text-small: 1rem;
+  --text-xsmall: 0.875rem;
 
   /* Radius */
   --radius-card: 1rem;

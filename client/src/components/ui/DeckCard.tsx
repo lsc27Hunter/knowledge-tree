@@ -1,11 +1,84 @@
+import { Button } from "./Button";
+import { MasteryBar } from "./MasteryBar";
+
+import ArrowRight from "../../assets/arrow-right.svg";
+import Logo from "../../assets/git_knowledgetree-icon.svg";
+import Edit from "../../assets/edit.svg";
+import Book from "../../assets/book.svg";
+import Danger from "../../assets/danger.svg";
+
 interface DeckCardProps {
-  text: string;
+  deckData: {
+    name: string;
+    description: string | null;
+    mastery: number;
+    dueDate: string | null;
+    totalCards: number;
+    lastStudiedAt: string;
+  };
 }
 
-export function DeckCard({ text }: DeckCardProps) {
+export function DeckCard({ deckData }: DeckCardProps) {
+  const dueDateOnly = deckData.dueDate?.slice(0, 10);
+  const todayIsoDate = new Date().toISOString().slice(0, 10);
+
   return (
-    <div className="min-h-44 w-full rounded-2xl bg-primary-grey p-4 text-white sm:min-h-56 sm:p-5">
-      {text}
+    <div className="min-h-44 w-full rounded-2xl bg-primary-grey p-2 text-white sm:min-h-56 sm:p-4">
+      <div className="flex flex-row items-center gap-2">
+        {dueDateOnly === todayIsoDate && (
+          <img
+            src={Danger}
+            alt="Due Today"
+            className="inline-block w-4 h-4 mr-1"
+            title="Due Today"
+          />
+        )}
+        <div className="max-w-[100%] truncate whitespace-nowrap">
+          {deckData?.name}
+        </div>
+        <div className="flex-1" />
+        <div className="flex flex-row">
+          <Button
+            text=""
+            width="fit"
+            color="primary-grey"
+            textColor="white"
+            icon={Edit}
+            iconPosition="right"
+            iconSize="w-6 h-6"
+          />
+          <Button
+            text=""
+            width="fit"
+            color="primary-grey"
+            textColor="white"
+            icon={Logo}
+            iconPosition="right"
+            iconSize="w-6 h-6"
+          />
+        </div>
+      </div>
+      <div className="mt-1 min-h-8 text-xsmall text-primary-light-grey">
+        {deckData?.description ?? ""}
+      </div>
+      <div className="mt-3">
+        <MasteryBar percentage={deckData.mastery * 100} />
+      </div>
+      <div className="mt-1 mb-10 text-xsmall text-primary-light-grey">
+        <img src={Book} alt="Book" className="inline-block w-4 h-4 mr-1" />{" "}
+        {deckData.totalCards} Cards
+      </div>
+      <div className="mx-auto flex w-9/10 items-center justify-center p-2 sm:w-9/10 font-medium">
+        <Button
+          text="Study"
+          width="full"
+          color="accent"
+          textColor="white"
+          icon={ArrowRight}
+          iconPosition="right"
+          to={`/study/1`}
+        />
+      </div>
     </div>
   );
 }

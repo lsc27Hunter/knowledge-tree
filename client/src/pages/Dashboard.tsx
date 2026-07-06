@@ -1,4 +1,6 @@
-import { UserButton } from "@clerk/react";
+import { UserButton, useUser } from "@clerk/react";
+
+import { useState } from "react";
 
 import { Navbar } from "../components/ui/Navbar";
 import { DeckCard } from "../components/ui/DeckCard";
@@ -8,47 +10,81 @@ import StarBadge from "../assets/star-badge.svg";
 import Danger from "../assets/danger.svg";
 
 export default function DashboardPage() {
-const DashboardPage: React.FC = () => {
+  const { isLoaded, user } = useUser();
+  const [sortingOption, setSortingOption] = useState("Due Date");
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-background px-6 py-10 text-primary-light-grey font-inter">
+        Loading...
+      </div>
+    );
+  }
+
   const userData = {
-    userId: 1,
-    userName: "daphnebgoode",
+    userId: user?.id,
+    userName: user?.username ?? user?.fullName ?? user?.firstName ?? "Learner",
+    userEmail: user?.primaryEmailAddress?.emailAddress ?? "",
+    userFirstName:
+      user?.username?.split(" ")[0] ?? user?.firstName ?? "Learner",
     currentStreak: 7, // to do: figure out how to calculate this from backend data
   };
+
   // to do: fetch decks from backend, remove mock demo data
   const decks = [
     {
       id: 1,
-      name: "Deck 1",
+      name: "OperatingSystemsLec1-09/23",
+      description: "Operating Systems Cumulative Deck",
       mastery: 0.27,
-      dueDate: "2026-07-04:00:00Z",
+      dueDate: null,
       totalCards: 23,
       lastStudiedAt: "2023-06-25T12:00:00Z",
     },
     {
       id: 2,
-      name: "Deck 2",
+      name: "Spanish Verbs",
+      description: null,
       mastery: 0.5,
-      dueDate: "2026-07-10:00:00Z",
+      dueDate: null,
       totalCards: 10,
       lastStudiedAt: "2026-06-25T12:00:00Z",
     },
     {
       id: 3,
-      name: "Deck 3",
+      name: "Discrete Structures",
+      description: null,
       mastery: 1,
-      dueDate: null,
+      dueDate: "2026-07-06:00:00Z",
       totalCards: 40,
       lastStudiedAt: "2026-06-25T12:00:00Z",
     },
     {
       id: 4,
-      name: "Deck 4",
+      name: "Databases & SQL",
+      description: null,
       mastery: 1,
       dueDate: null,
       totalCards: 40,
       lastStudiedAt: "2026-06-25T12:00:00Z",
     },
   ];
+
+  decks.sort((a, b) => {
+    if (sortingOption === "Due Date") {
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    } else if (sortingOption === "Mastery") {
+      return b.mastery - a.mastery;
+    } else if (sortingOption === "Last Studied") {
+      return (
+        new Date(b.lastStudiedAt).getTime() -
+        new Date(a.lastStudiedAt).getTime()
+      );
+    }
+    return 0;
+  });
 
   const deckCount = decks.length;
 
@@ -59,27 +95,31 @@ const DashboardPage: React.FC = () => {
 
   const decksDueThisWeek = decks.filter((deck) => {
     if (!deck.dueDate) return false;
-    const dueDate = new Date(deck.dueDate);
-    const now = new Date();
-    const oneWeekFromNow = new Date();
-    oneWeekFromNow.setDate(now.getDate() + 7);
 
-    return dueDate >= now && dueDate <= oneWeekFromNow;
+    const dueDateOnly = deck.dueDate.slice(0, 10);
+    const dueDate = new Date(`${dueDateOnly}T00:00:00`);
+
+    if (Number.isNaN(dueDate.getTime())) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const oneWeekFromToday = new Date(today);
+    oneWeekFromToday.setDate(today.getDate() + 7);
+
+    return dueDate >= today && dueDate <= oneWeekFromToday;
   });
 
   return (
     <div>
       <Navbar version="Dashboard" userButton={<UserButton />} />
-      <div className="px-6 py-10 sm:px-10 md:px-16">
-        <h1 className="font-inter text-white text-title">Dashboard</h1>
-        <p className="font-inter text-primary-light-grey mt-2">
-          Your decks will show up here.
-        </p>
-      <Navbar version="Dashboard" />
 
       <h2 className="font-inter text-white text-title-medium font-medium mx-15 mt-15">
-        My decks
+        {userData.userFirstName
+          ? `${userData.userFirstName}'s decks`
+          : "My decks"}
       </h2>
+
       <div className="font-inter text-primary-light-grey text-regular font-regular mx-15 mt-2">
         {deckCount} {deckCount === 1 ? "deck" : "decks"}{" "}
         <span aria-hidden="true">&bull;</span> {cardCount}{" "}
@@ -129,16 +169,18 @@ const DashboardPage: React.FC = () => {
       <label htmlFor="sortingOptions" className="mx-15 mt-2 flex justify-end">
         <select
           id="sortingOptions"
-          className="rounded-lg bg-primary-grey p-2 text-white focus:outline-none focus:ring-2 focus:ring-accent"
+          className="rounded-lg bg-background p-2 text-white focus:outline-none focus:ring-2 focus:ring-accent mx-2"
+          value={sortingOption}
+          onChange={(e) => setSortingOption(e.target.value)}
         >
-          <option value="name">Sort by Name</option>
-          <option value="mastery">Sort by Mastery</option>
-          <option value="dueDate">Sort by Due Date</option>
+          <option value="Due Date">Sort by Due Date</option>
+          <option value="Mastery">Sort by Mastery</option>
+          <option value="Last Studied">Sort by Last Studied</option>
         </select>
       </label>
       <div className="mx-15 mt-15 grid grid-cols-1 gap-15 md:grid-cols-2 xl:grid-cols-3">
         {decks.map((deck) => (
-          <DeckCard key={deck.id} text={deck.name} />
+          <DeckCard key={deck.id} deckData={deck} />
         ))}
       </div>
     </div>
