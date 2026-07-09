@@ -2,14 +2,14 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { watch } from "chokidar";
-import { execSync } from "child_process";
-import { styleText } from "util";
+import { exec } from "child_process";
+import { promisify, styleText } from "util";
 import fs from "fs/promises";
 import path from "path";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), openapi()],
+  plugins: [react(), tailwindcss(), apiBindings()],
   server: {
     proxy: {
       "/api": {
@@ -24,9 +24,11 @@ export default defineConfig({
   },
 });
 
-function openapi(): Plugin {
+const execAsync = promisify(exec);
+
+function apiBindings(): Plugin {
   return {
-    name: "openapi",
+    name: "apiBindings",
     async buildStart() {
       let lastGenerated;
       try {
@@ -42,19 +44,18 @@ function openapi(): Plugin {
       const apiDir = "../api/src";
       const changed = lastGenerated === null || await filesChanged(apiDir, lastGenerated);
       if (changed) {
-        console.log(`${styleText("magenta", "[openapi]")} Generating api bindings...`);
-        execSync('npm run openapi --include-workspace-root --if-present', { stdio: 'ignore' });
+        console.log(`${styleText("magenta", "[api]")} Generating api bindings...`);
+        await execAsync('npm run gen-api-bindings --include-workspace-root --if-present');
       }
     },
     configureServer(server) {
       const watchDir = '../api/src';
       const watcher = watch(watchDir, { ignoreInitial: true, ignored: [`${watchDir}/__pycache__`] });
       
-      watcher.on('change', (path) => {
+      watcher.on('change', async path => {
+        await execAsync('npm run gen-api-bindings --include-workspace-root --if-present');
         const time = new Date().toLocaleTimeString()
-        
-        console.log(`${styleText("gray", time)} ${styleText("magenta", "[openapi]")} ${styleText(["dim", "gray"], "(api)")} ${styleText("green", "api update")} ${styleText("gray", path)}`);
-        execSync('npm run openapi --include-workspace-root --if-present', { stdio: 'ignore' });
+        console.log(`${styleText("gray", time)} ${styleText("magenta", "[api]")} ${styleText("green", "update")} ${styleText("gray", path)}`);
         // server.ws.send({ type: 'full-reload' });
       });
 
