@@ -2,21 +2,34 @@ from datetime import datetime
 from typing import Any, cast
 
 from fastapi import FastAPI, HTTPException
+from fastapi.routing import APIRoute
 from sqlalchemy import CursorResult, delete, select
 from auth import CurrentUserId
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse
 
+# For generating openapi.json.
+# https://fastapi.tiangolo.com/advanced/generate-clients/#custom-generate-unique-id-function
+def custom_generate_unique_id(route: APIRoute):
+  try:
+    return f"{route.tags[0]}-{route.name}"
+  except IndexError:
+    return route.name
+
 app = FastAPI(
   docs_url='/api/docs',
   redoc_url='/api/redoc',
-  openapi_url='/api/openapi.json'
+  openapi_url='/api/openapi.json',
+  generate_unique_id_function=custom_generate_unique_id,
 )
 
 
 @app.get("/")
+async def hello_root():
+  return {"message": "Hello World"}
+
 @app.get("/api/hello")
-async def root():
+async def hello():
   return {"message": "Hello World"}
 
 @app.get("/api/me")

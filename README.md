@@ -6,6 +6,14 @@ npm run api
 npm run client
 ```
 
+## Generate bindings to the backend API
+When you run the frontend, API bindings will be generated in `client/src/api`.
+
+You can access them like this:
+``` ts
+import { getCards } from "./api";
+```
+
 ## Backend API
 ### Packages
 - asyncpg - postgres database driver

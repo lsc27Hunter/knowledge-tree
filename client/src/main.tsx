@@ -12,6 +12,7 @@ import "./index.css";
 import App from "./App.tsx";
 import SignInPage from "./pages/SignIn.tsx";
 import SignUpPage from "./pages/SignUp.tsx";
+import { TokenProvider } from "./components/TokenProvider.tsx";
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -33,11 +34,13 @@ function RootLayout() {
       signUpFallbackRedirectUrl="/dashboard"
       afterSignOutUrl="/"
     >
-      <Routes>
-        <Route path="/sign-in/*" element={<SignInPage />} />
-        <Route path="/sign-up/*" element={<SignUpPage />} />
-        <Route path="/*" element={<App />} />
-      </Routes>
+      <TokenProvider>
+        <Routes>
+          <Route path="/sign-in/*" element={<SignInPage />} />
+          <Route path="/sign-up/*" element={<SignUpPage />} />
+          <Route path="/*" element={<App />} />
+        </Routes>
+      </TokenProvider>
     </ClerkProvider>
   );
 }
