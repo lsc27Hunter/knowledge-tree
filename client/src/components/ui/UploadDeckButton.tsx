@@ -152,7 +152,7 @@ function ConfirmPage({ file, fileText }: ConfirmPageProps) {
           </div>
           <label className="mt-3 font-semibold text-primary-light-grey" htmlFor="due-date">Due Date (Optional)</label>
           <input className="px-3 py-2 w-40 text-white bg-primary-grey border border-primary-light-grey rounded scheme-dark" type="date" id="date" name="date" />
-          <button className="cursor-pointer bg-accent px-2 py-2 rounded-lg absolute right-16 bottom-4" type="submit">Create Deck ({parsedCards === null ? "Loading..." : `${parsedCards.length} cards`})</button>
+          <Dialog.Close className="cursor-pointer bg-accent px-2 py-2 rounded-lg absolute right-16 bottom-4" type="submit">Create Deck ({parsedCards === null ? "Loading..." : `${parsedCards.length} cards`})</Dialog.Close>
         </form>
         <div className="mt-3 font-semibold text-primary-light-grey">Preview</div>
         <div className="flex flex-col gap-y-4">
