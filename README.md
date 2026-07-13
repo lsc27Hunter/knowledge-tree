@@ -11,7 +11,19 @@ When you run the frontend, API bindings will be generated in `client/src/api`.
 
 You can access them like this:
 ``` ts
-import { getCards } from "./api";
+import { createCard } from "./api";
+
+async function addCard(deckId: number, question: string, answer: string) {
+  const res = await createCard({
+    path: {
+      deckId,
+    },
+    body: {
+      question,
+      answer,
+    },
+  });
+}
 ```
 
 ## Backend API

@@ -3,7 +3,7 @@ from datetime import datetime
 from io import StringIO
 from typing import Annotated, Any, cast
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Path, UploadFile
 from fastapi.routing import APIRoute
 from sqlalchemy import CursorResult, delete, select
 from auth import CurrentUserId
@@ -69,8 +69,12 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
     description=db_deck.description,
   )
 
-@app.get("/api/decks/{deck_id}", response_model=DeckGetResponse)
-async def get_deck(deck_id: int, session: SessionDep, user_id: CurrentUserId):
+@app.get("/api/decks/{deckId}", response_model=DeckGetResponse)
+async def get_deck(
+  deck_id: Annotated[int, Path(alias="deckId")],
+  session: SessionDep,
+  user_id: CurrentUserId,
+):
   deck = await session.get(Deck, deck_id)
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
@@ -83,8 +87,12 @@ async def get_deck(deck_id: int, session: SessionDep, user_id: CurrentUserId):
     retention_rate=0,
   )
 
-@app.delete("/api/decks/{deck_id}", response_model=DeckDeleteResponse)
-async def delete_deck(deck_id: int, session: SessionDep, user_id: CurrentUserId):
+@app.delete("/api/decks/{deckId}", response_model=DeckDeleteResponse)
+async def delete_deck(
+  deck_id: Annotated[int, Path(alias="deckId")],
+  session: SessionDep,
+  user_id: CurrentUserId,
+):
   deck = await session.get(Deck, deck_id)
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
@@ -132,8 +140,13 @@ async def upload_deck(
     message="success",
   )
 
-@app.post("/api/decks/{deck_id}/cards", response_model=CardCreateResponse)
-async def create_card(deck_id: int, card: CardCreate, session: SessionDep, user_id: CurrentUserId):
+@app.post("/api/decks/{deckId}/cards", response_model=CardCreateResponse)
+async def create_card(
+  deck_id: Annotated[int, Path(alias="deckId")],
+  card: CardCreate,
+  session: SessionDep,
+  user_id: CurrentUserId,
+):
   deck = await session.get(Deck, deck_id)
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
@@ -154,8 +167,12 @@ async def create_card(deck_id: int, card: CardCreate, session: SessionDep, user_
     answer=db_card.answer,
   )
 
-@app.get("/api/decks/{deck_id}/cards", response_model=list[CardListResponse])
-async def get_cards(deck_id: int, session: SessionDep, user_id: CurrentUserId):
+@app.get("/api/decks/{deckId}/cards", response_model=list[CardListResponse])
+async def get_cards(
+  deck_id: Annotated[int, Path(alias="deckId")],
+  session: SessionDep,
+  user_id: CurrentUserId,
+):
   deck = await session.get(Deck, deck_id)
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
@@ -170,8 +187,13 @@ async def get_cards(deck_id: int, session: SessionDep, user_id: CurrentUserId):
     ) for card in cards
   ]
 
-@app.patch("/api/cards/{card_id}", response_model=CardUpdateResponse)
-async def update_card(card_id: int, card: CardUpdate, session: SessionDep, user_id: CurrentUserId):
+@app.patch("/api/cards/{cardId}", response_model=CardUpdateResponse)
+async def update_card(
+  card_id: Annotated[int, Path(alias="cardId")],
+  card: CardUpdate,
+  session: SessionDep,
+  user_id: CurrentUserId
+):
   db_card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
   if not db_card:
     raise HTTPException(status_code=404, detail="Card not found")
@@ -189,8 +211,12 @@ async def update_card(card_id: int, card: CardUpdate, session: SessionDep, user_
     answer=db_card.answer,
   )
 
-@app.delete("/api/cards/{card_id}", response_model=CardDeleteResponse)
-async def delete_card(card_id: int, session: SessionDep, user_id: CurrentUserId):
+@app.delete("/api/cards/{cardId}", response_model=CardDeleteResponse)
+async def delete_card(
+  card_id: Annotated[int, Path(alias="cardId")],
+  session: SessionDep,
+  user_id: CurrentUserId
+):
   db_card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
   if not db_card:
     raise HTTPException(status_code=404, detail="Card not found")
