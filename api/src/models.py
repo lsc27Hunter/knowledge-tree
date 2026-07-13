@@ -20,6 +20,7 @@ class Deck(Base):
   description: Mapped[str]
   due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
+  mastery: Mapped[Optional[int]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
 
 class Card(Base):
@@ -63,6 +64,7 @@ class DeckCreate(APISchema):
   description: str
   due_date: datetime | None = None
   last_studied_at: datetime | None = None
+  mastery: int = 0
   cards: list[CardCreate] = Field(min_length=1)
 
 class DeckCreateResponse(APISchema):

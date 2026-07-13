@@ -52,7 +52,7 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
       description=deck.description,
       due_date=deck.due_date,
       last_studied_at=deck.last_studied_at,
-      mastery=0,
+      mastery=deck.mastery,
       cards_due_today=0,
       total_cards=total_cards,
     ) for deck, total_cards in rows
@@ -66,6 +66,7 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
     description=deck.description,
     due_date=deck.due_date,
     last_studied_at=deck.last_studied_at,
+    mastery=0
   )
   session.add(db_deck)
   await session.flush()
