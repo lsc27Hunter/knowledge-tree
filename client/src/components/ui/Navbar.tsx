@@ -55,7 +55,7 @@ export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
       ) : version === "Dashboard" ? (
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap sm:gap-4">
           <Button
-            text="Upload Deck"
+            text="Create Deck"
             width="fit"
             color="accent"
             textColor="white"
