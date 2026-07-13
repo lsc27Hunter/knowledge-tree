@@ -27,7 +27,6 @@ export function DeckCard({ deckData }: DeckCardProps) {
   const dueDateOnly = deckData.dueDate?.slice(0, 10);
   const todayIsoDate = new Date().toISOString().slice(0, 10);
 
-  console.log(deckData);
   return (
     <div className="min-h-44 w-full rounded-2xl bg-primary-grey p-2 text-white sm:min-h-56 sm:p-4">
       <div className="flex flex-row items-center gap-2">
