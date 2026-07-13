@@ -47,6 +47,8 @@ class APISchema(BaseModel):
 class DeckListResponse(APISchema):
   id: int
   name: str
+  description: str | None
+  due_date: datetime | None
   mastery: int
   cards_due_today: int
   total_cards: int

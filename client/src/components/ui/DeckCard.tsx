@@ -1,14 +1,18 @@
 import { Button } from "./Button";
 import { MasteryBar } from "./MasteryBar";
 
+import { deleteDeck } from "../../api";
+
 import ArrowRight from "../../assets/arrow-right.svg";
 import Logo from "../../assets/git_knowledgetree-icon.svg";
 import Edit from "../../assets/edit.svg";
 import Book from "../../assets/book.svg";
 import Danger from "../../assets/danger.svg";
+import Trash from "../../assets/trash.svg";
 
 interface DeckCardProps {
   deckData: {
+    id: number;
     name: string;
     description: string | null;
     mastery: number;
@@ -19,9 +23,11 @@ interface DeckCardProps {
 }
 
 export function DeckCard({ deckData }: DeckCardProps) {
+  const deckId = deckData.id;
   const dueDateOnly = deckData.dueDate?.slice(0, 10);
   const todayIsoDate = new Date().toISOString().slice(0, 10);
 
+  console.log(deckData);
   return (
     <div className="min-h-44 w-full rounded-2xl bg-primary-grey p-2 text-white sm:min-h-56 sm:p-4">
       <div className="flex flex-row items-center gap-2">
@@ -55,6 +61,30 @@ export function DeckCard({ deckData }: DeckCardProps) {
             icon={Logo}
             iconPosition="right"
             iconSize="w-6 h-6"
+          />
+          <Button
+            text=""
+            width="fit"
+            color="primary-grey"
+            textColor="white"
+            icon={Trash}
+            iconPosition="right"
+            iconSize="w-6 h-6"
+            onClick={async () => {
+              const confirmed = window.confirm(
+                "Are you sure you want to delete this deck? This action cannot be undone.",
+              );
+              if (!confirmed) return;
+
+              try {
+                await deleteDeck({
+                  path: { deckId },
+                });
+                window.location.reload();
+              } catch (error) {
+                console.error("Failed to delete deck:", error);
+              }
+            }}
           />
         </div>
       </div>

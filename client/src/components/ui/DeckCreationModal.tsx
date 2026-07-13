@@ -5,9 +5,13 @@ import { createDeck, type DeckCreate, type CardCreate } from "../../api";
 
 interface DeckCreationModalProps {
   onClose: () => void;
+  onCreated?: () => void;
 }
 
-export function DeckCreationModal({ onClose }: DeckCreationModalProps) {
+export function DeckCreationModal({
+  onClose,
+  onCreated,
+}: DeckCreationModalProps) {
   const [name, setName] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
@@ -89,6 +93,7 @@ export function DeckCreationModal({ onClose }: DeckCreationModalProps) {
     setIsSubmitting(true);
     try {
       await createDeck({ body: payload });
+      onCreated?.();
       onClose();
     } catch (error) {
       const message =

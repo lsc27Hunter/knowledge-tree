@@ -3,7 +3,7 @@ from typing import Annotated, Any, cast
 
 from fastapi import FastAPI, HTTPException, Path
 from fastapi.routing import APIRoute
-from sqlalchemy import CursorResult, delete, select
+from sqlalchemy import CursorResult, delete, func, select
 from auth import CurrentUserId
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse
@@ -38,16 +38,24 @@ async def get_me(user_id: CurrentUserId):
 
 @app.get("/api/decks", response_model=list[DeckListResponse])
 async def get_decks(session: SessionDep, user_id: CurrentUserId):
-  decks = (await session.execute(select(Deck).where(Deck.user_id == user_id))).scalars().all()
+  rows = (await session.execute(
+    select(Deck, func.count(Card.id))
+    .outerjoin(Card, Card.deck_id == Deck.id)
+    .where(Deck.user_id == user_id)
+    .group_by(Deck.id)
+  )).all()
+
   return [
     DeckListResponse(
       id=deck.id,
       name=deck.name,
+      description=deck.description,
+      due_date=deck.due_date,
       last_studied_at=deck.last_studied_at,
       mastery=0,
       cards_due_today=0,
-      total_cards=0,
-    ) for deck in decks
+      total_cards=total_cards,
+    ) for deck, total_cards in rows
   ]
 
 @app.post("/api/decks", response_model=DeckCreateResponse)
