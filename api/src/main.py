@@ -56,9 +56,22 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
     user_id=user_id,
     name=deck.name,
     description=deck.description,
-    last_studied_at=None,
+    due_date=deck.due_date,
+    last_studied_at=deck.last_studied_at,
   )
   session.add(db_deck)
+  await session.flush()
+
+  for card in deck.cards:
+    session.add(Card(
+      deck_id=db_deck.id,
+      question=card.question,
+      answer=card.answer,
+      n=0,
+      ef=0,
+      i=0,
+    ))
+
   await session.commit()
   await session.refresh(db_deck)
   return DeckCreateResponse(

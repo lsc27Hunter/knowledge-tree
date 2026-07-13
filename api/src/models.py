@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
@@ -18,6 +18,7 @@ class Deck(Base):
   user_id: Mapped[str]
   name: Mapped[str]
   description: Mapped[str]
+  due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
 
@@ -51,9 +52,16 @@ class DeckListResponse(APISchema):
   total_cards: int
   last_studied_at: datetime | None
 
+class CardCreate(APISchema):
+  question: str
+  answer: str
+
 class DeckCreate(APISchema):
   name: str
   description: str
+  due_date: datetime | None = None
+  last_studied_at: datetime | None = None
+  cards: list[CardCreate] = Field(min_length=1)
 
 class DeckCreateResponse(APISchema):
   id: int
@@ -77,10 +85,6 @@ class CardListResponse(APISchema):
   answer: str
   mastery_score: int
   next_review_date: datetime
-
-class CardCreate(APISchema):
-  question: str
-  answer: str
 
 class CardCreateResponse(APISchema):
   id: int
