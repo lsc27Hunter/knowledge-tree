@@ -83,6 +83,11 @@ class DeckGetResponse(APISchema):
 class DeckDeleteResponse(APISchema):
   success: bool
 
+class DeckUploadResponse(APISchema):
+  deck_id: int
+  cards_created: int
+  message: str
+
 class CardListResponse(APISchema):
   id: int
   question: str

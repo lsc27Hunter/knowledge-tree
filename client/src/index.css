@@ -7,6 +7,15 @@ body,
   background: #000000;
 }
 
+/* Needed by Base UI. */
+/* https://base-ui.com/react/overview/quick-start */
+#root {
+  isolation: isolate;
+}
+body {
+  position: relative;
+}
+
 body {
   margin: 0;
 }
