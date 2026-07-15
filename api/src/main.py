@@ -9,6 +9,8 @@ from sqlalchemy import CursorResult, delete, select
 from auth import CurrentUserId
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUploadResponse
+from routers.study import router as study_router
+from utils.mastery import calculate_deck_mastery, card_mastery
 
 # For generating openapi.json.
 # https://fastapi.tiangolo.com/advanced/generate-clients/#custom-generate-unique-id-function
@@ -24,6 +26,8 @@ app = FastAPI(
   openapi_url='/api/openapi.json',
   generate_unique_id_function=custom_generate_unique_id,
 )
+
+app.include_router(study_router)
 
 
 @app.get("/")
@@ -41,16 +45,21 @@ async def get_me(user_id: CurrentUserId):
 @app.get("/api/decks", response_model=list[DeckListResponse])
 async def get_decks(session: SessionDep, user_id: CurrentUserId):
   decks = (await session.execute(select(Deck).where(Deck.user_id == user_id))).scalars().all()
-  return [
-    DeckListResponse(
-      id=deck.id,
-      name=deck.name,
-      last_studied_at=deck.last_studied_at,
-      mastery=0,
-      cards_due_today=0,
-      total_cards=0,
-    ) for deck in decks
-  ]
+  responses: list[DeckListResponse] = []
+  for deck in decks:
+    cards = (await session.execute(select(Card).where(Card.deck_id == deck.id))).scalars().all()
+    now = datetime.utcnow()
+    responses.append(
+      DeckListResponse(
+        id=deck.id,
+        name=deck.name,
+        last_studied_at=deck.last_studied_at,
+        mastery=int(round(calculate_deck_mastery(cards))),
+        cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+        total_cards=len(cards),
+      )
+    )
+  return responses
 
 @app.post("/api/decks", response_model=DeckCreateResponse)
 async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUserId):
@@ -78,13 +87,16 @@ async def get_deck(
   deck = await session.get(Deck, deck_id)
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
+  cards = (await session.execute(select(Card).where(Card.deck_id == deck_id))).scalars().all()
+  now = datetime.utcnow()
+  mastery = calculate_deck_mastery(cards)
   return DeckGetResponse(
     id=deck.id,
     name=deck.name,
-    mastery=0,
-    cards_due_today=0,
-    total_cards=0,
-    retention_rate=0,
+    mastery=int(round(mastery)),
+    cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+    total_cards=len(cards),
+    retention_rate=int(round(mastery)),
   )
 
 @app.delete("/api/decks/{deckId}", response_model=DeckDeleteResponse)
@@ -126,9 +138,6 @@ async def upload_deck(
       deck_id=deck_id,
       question=question,
       answer=answer,
-      n=0,
-      ef=0,
-      i=0,
     )
     session.add(db_card)
     await session.commit()
@@ -154,9 +163,10 @@ async def create_card(
     deck_id=deck_id,
     question=card.question,
     answer=card.answer,
-    n=0,
-    ef=0,
-    i=0,
+    repetition_count=0,
+    easiness_factor=2.5,
+    interval=0,
+    next_review_date=datetime.utcnow(),
   )
   session.add(db_card)
   await session.commit()
@@ -182,8 +192,8 @@ async def get_cards(
       id=card.id,
       question=card.question,
       answer=card.answer,
-      mastery_score=0,
-      next_review_date=datetime.now(),
+      mastery_score=int(round(card_mastery(card.interval) * 100)),
+      next_review_date=card.next_review_date,
     ) for card in cards
   ]
 
