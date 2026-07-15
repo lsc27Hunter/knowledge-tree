@@ -45,7 +45,7 @@ function apiBindings(): Plugin {
       const changed = lastGenerated === null || await filesChanged(apiDir, lastGenerated);
       if (changed) {
         console.log(`${styleText("magenta", "[api]")} Generating api bindings...`);
-        await execAsync('npm run gen-api-bindings --include-workspace-root --if-present');
+        await generateApiBindings();
       }
     },
     configureServer(server) {
@@ -53,9 +53,14 @@ function apiBindings(): Plugin {
       const watcher = watch(watchDir, { ignoreInitial: true, ignored: [`${watchDir}/__pycache__`] });
       
       watcher.on('change', async path => {
-        await execAsync('npm run gen-api-bindings --include-workspace-root --if-present');
+        const success = await tryGenerateApiBindings();
+        
         const time = new Date().toLocaleTimeString()
-        console.log(`${styleText("gray", time)} ${styleText("magenta", "[api]")} ${styleText("green", "update")} ${styleText("gray", path)}`);
+        if (success) {
+          console.log(`${styleText("gray", time)} ${styleText("magenta", "[api]")} ${styleText("green", "update")} ${styleText("gray", path)}`);
+        } else {
+          console.log(`${styleText("gray", time)} ${styleText("red", "[api]")} error, waiting for next update...`);
+        }
         // server.ws.send({ type: 'full-reload' });
       });
 
@@ -64,6 +69,20 @@ function apiBindings(): Plugin {
       });
     },
   };
+}
+
+// Returns whether the command succeeded.
+async function tryGenerateApiBindings() {
+  try {
+    await generateApiBindings();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function generateApiBindings() {
+  await execAsync('npm run gen-api-bindings --include-workspace-root --if-present');
 }
 
 async function filesChanged(dir: string, since: number) {
