@@ -76,6 +76,11 @@ class DeckDeleteResponse(APISchema):
 class DeckMasteryResponse(APISchema):
   mastery_percentage: float
 
+class DeckUploadResponse(APISchema):
+  deck_id: int
+  cards_created: int
+  message: str
+
 class CardListResponse(APISchema):
   id: int
   question: str

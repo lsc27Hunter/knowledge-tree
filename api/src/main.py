@@ -1,12 +1,14 @@
+import csv
 from datetime import datetime
+from io import StringIO
 from typing import Annotated, Any, cast
 
-from fastapi import FastAPI, HTTPException, Path
+from fastapi import FastAPI, Form, HTTPException, Path, UploadFile
 from fastapi.routing import APIRoute
 from sqlalchemy import CursorResult, delete, select
 from auth import CurrentUserId
 from db import SessionDep
-from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse
+from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUploadResponse
 from routers.study import router as study_router
 from utils.mastery import calculate_deck_mastery, card_mastery
 
@@ -109,6 +111,43 @@ async def delete_deck(
   result = await session.execute(delete(Deck).where(Deck.id == deck_id))
   await session.commit()
   return DeckDeleteResponse(success=cast(CursorResult[Any], result).rowcount > 0)
+
+@app.post("/api/decks/upload", response_model=DeckUploadResponse)
+async def upload_deck(
+  deck_name: Annotated[str, Form(alias="deckName")],
+  file: UploadFile,
+  session: SessionDep,
+  user_id: CurrentUserId,
+):
+  db_deck = Deck(
+    user_id=user_id,
+    name=deck_name,
+    description="",
+    last_studied_at=None,
+  )
+  session.add(db_deck)
+  await session.flush()
+  deck_id = db_deck.id
+  file_text = (await file.read()).decode()
+  cards_created = 0
+  for row in csv.reader(StringIO(file_text)):
+    if len(row) != 2:
+      continue
+    [question, answer] = row
+    db_card = Card(
+      deck_id=deck_id,
+      question=question,
+      answer=answer,
+    )
+    session.add(db_card)
+    await session.commit()
+    cards_created += 1
+  
+  return DeckUploadResponse(
+    deck_id=deck_id,
+    cards_created=cards_created,
+    message="success",
+  )
 
 @app.post("/api/decks/{deckId}/cards", response_model=CardCreateResponse)
 async def create_card(
