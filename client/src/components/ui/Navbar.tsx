@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import { Logo } from "./Logo";
 import { Link } from "react-router-dom";
 import { Button } from "./Button";
-
-import UploadIcon from "../../assets/upload-file.svg";
+import UploadDeckButton from "./UploadDeckButton";
 
 interface NavbarProps {
   version: "Landing" | "Dashboard" | "Blank";
@@ -44,15 +43,7 @@ export function Navbar({ version, userButton }: NavbarProps) {
         </div>
       ) : version === "Dashboard" ? (
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap sm:gap-4">
-          <Button
-            text="Upload Deck"
-            width="fit"
-            color="accent"
-            textColor="white"
-            icon={UploadIcon}
-            iconPosition="right"
-            iconOnlyOnMobile
-          />
+          <UploadDeckButton />
           {userButton}
         </div>
       ) : null}
