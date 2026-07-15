@@ -14,3 +14,13 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "sqlalchemy[asyncio]>=2.0.51",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "testcontainers[postgres]>=4.14.2",
+]
+
+# https://anyio.readthedocs.io/en/stable/testing.html#creating-asynchronous-tests
+[tool.pytest.ini_options]
+anyio_mode = "auto"
