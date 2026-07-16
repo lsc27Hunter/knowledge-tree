@@ -18,7 +18,9 @@ class Deck(Base):
   user_id: Mapped[str]
   name: Mapped[str]
   description: Mapped[str]
+  due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
+  mastery: Mapped[Optional[int]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
 
 class Card(Base):
@@ -48,14 +50,24 @@ class APISchema(BaseModel):
 class DeckListResponse(APISchema):
   id: int
   name: str
+  description: str | None
+  due_date: datetime | None
   mastery: int
   cards_due_today: int
   total_cards: int
   last_studied_at: datetime | None
 
+class CardCreate(APISchema):
+  question: str
+  answer: str
+
 class DeckCreate(APISchema):
   name: str
   description: str
+  due_date: datetime | None = None
+  last_studied_at: datetime | None = None
+  mastery: int = 0
+  cards: list[CardCreate] = Field(min_length=1)
 
 class DeckCreateResponse(APISchema):
   id: int
@@ -87,10 +99,6 @@ class CardListResponse(APISchema):
   answer: str
   mastery_score: int
   next_review_date: datetime
-
-class CardCreate(APISchema):
-  question: str
-  answer: str
 
 class CardCreateResponse(APISchema):
   id: int
