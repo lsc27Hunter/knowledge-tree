@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -30,9 +30,11 @@ class Card(Base):
   deck_id: Mapped[int] = mapped_column(ForeignKey("deck.id", ondelete="CASCADE"))
   question: Mapped[str]
   answer: Mapped[str]
-  n: Mapped[int]
-  ef: Mapped[float]
-  i: Mapped[int]
+  # SM-2 scheduling state
+  repetition_count: Mapped[int] = mapped_column(default=0)
+  easiness_factor: Mapped[float] = mapped_column(default=2.5)
+  interval: Mapped[int] = mapped_column(default=0)
+  next_review_date: Mapped[datetime] = mapped_column(default_factory=datetime.utcnow, server_default=func.now())
   deck: Mapped["Deck"] = relationship(back_populates="cards", init=False)
 
 # Translates camelCase request fields to snake_case.
@@ -83,6 +85,9 @@ class DeckGetResponse(APISchema):
 class DeckDeleteResponse(APISchema):
   success: bool
 
+class DeckMasteryResponse(APISchema):
+  mastery_percentage: float
+
 class DeckUploadResponse(APISchema):
   deck_id: int
   cards_created: int
@@ -111,3 +116,13 @@ class CardUpdateResponse(APISchema):
 
 class CardDeleteResponse(APISchema):
   success: bool
+
+class CardReviewRequest(APISchema):
+  rating: str = Field(description='UI rating: "red", "yellow", or "green"')
+
+class CardReviewResponse(APISchema):
+  id: int
+  repetition_count: int
+  easiness_factor: float
+  interval: int
+  next_review_date: datetime
