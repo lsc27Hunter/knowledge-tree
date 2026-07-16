@@ -97,7 +97,16 @@ function ModalContent({ onClose, onCreated }: ModalContentProps) {
         />
       );
     case "confirm":
-      return <ConfirmPage file={page.file} fileText={page.fileText} />;
+      return (
+        <ConfirmPage
+          file={page.file}
+          fileText={page.fileText}
+          onSuccess={() => {
+            onCreated?.();
+            onClose();
+          }}
+        />
+      );
     case "manual":
       return (
         <ManualPage
@@ -167,6 +176,7 @@ function UploadPage({ onChooseFile, onManualCreate }: UploadPageProps) {
 interface ConfirmPageProps {
   file: File;
   fileText: string;
+  onSuccess(): void;
 }
 
 interface ParsedCard {
@@ -174,9 +184,11 @@ interface ParsedCard {
   answer: string;
 }
 
-function ConfirmPage({ file, fileText }: ConfirmPageProps) {
+function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
   const initialDeckName = file.name.replace(/\.csv$/, "");
   const [parsedCards, setParsedCards] = useState<ParsedCard[] | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   useEffect(() => {
     Papa.parse(fileText, {
       complete(results) {
@@ -192,15 +204,28 @@ function ConfirmPage({ file, fileText }: ConfirmPageProps) {
       },
     });
   }, [fileText]);
-  const onSubmit: SubmitEventHandler<HTMLFormElement> = (e) => {
+  const onSubmit: SubmitEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
+    setErrorMessage(null);
     const formData = new FormData(e.target);
-    uploadDeck({
-      body: {
-        deckName: formData.get("deck-name")?.toString() ?? "",
-        file,
-      },
-    });
+    setIsSubmitting(true);
+    try {
+      await uploadDeck({
+        body: {
+          deckName: formData.get("deck-name")?.toString() ?? "",
+          description: formData.get("description")?.toString() ?? "",
+          dueDate: formData.get("dueDate")?.toString() || null,
+          file,
+        },
+      });
+      onSuccess();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to upload deck.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   const parsedCountDisplay =
     parsedCards === null ? "Loading..." : `${parsedCards.length} cards parsed`;
@@ -252,19 +277,21 @@ function ConfirmPage({ file, fileText }: ConfirmPageProps) {
           <input
             className="px-3 py-2 w-40 text-white bg-primary-grey border border-primary-light-grey rounded scheme-dark"
             type="date"
-            id="date"
-            name="date"
+            id="due-date"
+            name="dueDate"
           />
-          <Dialog.Close
+          {errorMessage ? (
+            <div className="mt-2 text-sm text-danger-red">{errorMessage}</div>
+          ) : null}
+          <button
             className="cursor-pointer bg-accent px-2 py-2 rounded-lg absolute right-16 bottom-4"
             type="submit"
+            disabled={isSubmitting}
           >
-            Create Deck (
-            {parsedCards === null
-              ? "Loading..."
-              : `${parsedCards.length} cards`}
-            )
-          </Dialog.Close>
+            {isSubmitting
+              ? "Uploading..."
+              : `Create Deck (${parsedCards === null ? "Loading..." : `${parsedCards.length} cards`})`}
+          </button>
         </form>
         <div className="mt-3 font-semibold text-primary-light-grey">
           Preview

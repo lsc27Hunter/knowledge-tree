@@ -134,13 +134,24 @@ async def upload_deck(
   file: UploadFile,
   session: SessionDep,
   user_id: CurrentUserId,
+  due_date: Annotated[str | None, Form(alias="dueDate")] = None,
+  description: Annotated[str, Form()] = "",
 ):
+  parsed_due_date = (
+    datetime.fromisoformat(due_date)
+    if due_date
+    else None
+  )
+
   db_deck = Deck(
     user_id=user_id,
     name=deck_name,
-    description="",
+    description=description,
     last_studied_at=None,
+    due_date=parsed_due_date,
+    mastery=0
   )
+
   session.add(db_deck)
   await session.flush()
   deck_id = db_deck.id
