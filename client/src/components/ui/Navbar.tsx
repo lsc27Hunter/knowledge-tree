@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
 import { Logo } from "./Logo";
 import { Link } from "react-router-dom";
 import { Button } from "./Button";
@@ -14,17 +13,10 @@ interface NavbarProps {
 export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
   const isLanding = version === "Landing";
 
-  const [isDeckCreationModalOpen, setIsDeckCreationModalOpen] = useState(false);
   return (
     <div
       className={`sticky top-0 z-50 flex w-full gap-3 border-b border-primary-grey bg-background/95 p-4 backdrop-blur ${isLanding ? "flex-col items-center sm:flex-row" : "flex-wrap items-center"}`}
     >
-      {isDeckCreationModalOpen && (
-        <DeckCreationModal
-          onClose={() => setIsDeckCreationModalOpen(false)}
-          onCreated={onDeckCreated}
-        />
-      )}
       <Link
         to="/"
         aria-label="Go to home"
@@ -52,7 +44,7 @@ export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
         </div>
       ) : version === "Dashboard" ? (
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap sm:gap-4">
-          <UploadDeckButton />
+          <UploadDeckButton onCreated={onDeckCreated} />
           {userButton}
         </div>
       ) : null}

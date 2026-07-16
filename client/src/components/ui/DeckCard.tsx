@@ -105,7 +105,7 @@ export function DeckCard({ deckData }: DeckCardProps) {
           textColor="white"
           icon={ArrowRight}
           iconPosition="right"
-          to={`/study/1`}
+          to={`/study/${deckId}`}
         />
       </div>
     </div>

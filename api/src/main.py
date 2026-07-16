@@ -53,6 +53,8 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
       DeckListResponse(
         id=deck.id,
         name=deck.name,
+        description=deck.description,
+        due_date=deck.due_date,
         last_studied_at=deck.last_studied_at,
         mastery=int(round(calculate_deck_mastery(cards))),
         cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
@@ -79,9 +81,9 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
       deck_id=db_deck.id,
       question=card.question,
       answer=card.answer,
-      n=0,
-      ef=0,
-      i=0,
+      repetition_count=0,
+      easiness_factor=2.5,
+      interval=0,
     ))
 
   await session.commit()
