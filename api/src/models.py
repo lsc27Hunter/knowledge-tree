@@ -20,7 +20,6 @@ class Deck(Base):
   description: Mapped[str]
   due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
-  mastery: Mapped[Optional[int]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
 
 class Card(Base):
