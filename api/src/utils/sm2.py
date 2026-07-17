@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Literal
 
 
 RATING_TO_QUALITY = {
@@ -22,7 +23,7 @@ class SM2Result:
   next_review_date: datetime
 
 
-def rating_to_quality(rating: str) -> int:
+def rating_to_quality(rating: Literal["red", "yellow", "green"]) -> int:
   key = rating.strip().lower()
   if key not in RATING_TO_QUALITY:
     raise ValueError(f'Invalid rating "{rating}". Expected red, yellow, or green.')

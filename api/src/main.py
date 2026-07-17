@@ -71,7 +71,6 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
     description=deck.description,
     due_date=deck.due_date,
     last_studied_at=deck.last_studied_at,
-    mastery=0
   )
   session.add(db_deck)
   await session.flush()
@@ -149,7 +148,6 @@ async def upload_deck(
     description=description,
     last_studied_at=None,
     due_date=parsed_due_date,
-    mastery=0
   )
 
   session.add(db_deck)

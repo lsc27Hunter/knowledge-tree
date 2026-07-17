@@ -50,7 +50,7 @@ function apiBindings(): Plugin {
     },
     configureServer(server) {
       const watchDir = '../api/src';
-      const watcher = watch(watchDir, { ignoreInitial: true, ignored: [`${watchDir}/__pycache__`] });
+      const watcher = watch(watchDir, { ignoreInitial: true, ignored: [/(^|[\/\\])__pycache__([\/\\]|$)/] });
       
       watcher.on('change', async path => {
         await execAsync('npm run gen-api-bindings --include-workspace-root --if-present');
