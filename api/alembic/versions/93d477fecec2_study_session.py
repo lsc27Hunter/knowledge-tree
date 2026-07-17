@@ -1,8 +1,8 @@
 """study_session
 
-Revision ID: 42fec71877b8
-Revises: a1b2c3d4e5f6
-Create Date: 2026-07-17 01:48:21.757251
+Revision ID: 93d477fecec2
+Revises: f5dd2db97748
+Create Date: 2026-07-17 18:49:19.809431
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '42fec71877b8'
-down_revision: Union[str, Sequence[str], None] = 'a1b2c3d4e5f6'
+revision: str = '93d477fecec2'
+down_revision: Union[str, Sequence[str], None] = 'f5dd2db97748'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -24,8 +24,7 @@ def upgrade() -> None:
     op.create_table('study_session',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('deck_id', sa.Integer(), nullable=False),
-    sa.Column('current_position', sa.Integer(), nullable=False),
-    sa.Column('page', sa.Enum('cards', 'results', native_enum=False), nullable=False),
+    sa.Column('old_mastery', sa.Float(), nullable=False),
     sa.ForeignKeyConstraint(['deck_id'], ['deck.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('deck_id')
@@ -33,7 +32,7 @@ def upgrade() -> None:
     op.create_table('study_session_card',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('card_id', sa.Integer(), nullable=False),
-    sa.Column('position', sa.Integer(), nullable=False),
+    sa.Column('index', sa.Integer(), nullable=False),
     sa.Column('study_session_id', sa.Integer(), nullable=False),
     sa.Column('rating', sa.Enum('red', 'yellow', 'green', native_enum=False), nullable=True),
     sa.ForeignKeyConstraint(['card_id'], ['card.id'], ondelete='CASCADE'),

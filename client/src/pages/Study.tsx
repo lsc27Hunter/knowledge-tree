@@ -6,7 +6,7 @@ import GreenCheckSquare from "../assets/green-check-square.svg";
 import YellowSquare from "../assets/yellow-square.svg";
 import RedXSquare from "../assets/red-x-square.svg";
 import { Link, useParams } from "react-router-dom";
-import { reviewCard, study, type StudySessionResponse, completeStudySession, nextCard, prevCard, syncStudyPage, changeToResultsPage } from "../api";
+import { reviewCard, study, type StudySessionResponse, completeStudySession, getDeckMastery } from "../api";
 
 const StudyPage: React.FC = () => {
   return (
@@ -17,7 +17,7 @@ const StudyPage: React.FC = () => {
   );
 };
 
-type StudySectionPage = { name: "cards" } | { name: "results", mastery: number }
+type StudySectionPage = { name: "cards" } | { name: "results", mastery: number | null, oldMastery: number }
 type CardId = number;
 type Rating = "red" | "yellow" | "green";
 type RateResult = "rated" | "unrated";
@@ -30,7 +30,6 @@ function StudySection() {
   const [page, setPage] = useState<StudySectionPage>({ name: "cards" });
   const [ratings, setRatings] = useState<Map<CardId, Rating>>(new Map());
 
-  // const deck = getDeckById(deckId);
   useEffect(() => {
     study({ path: { deckId }}).then(res => {
       if (res.data) {
@@ -42,14 +41,14 @@ function StudySection() {
             fetchedRatings.set(card.id, card.rating);
           }
         }
-        setStartFrom(fetchedStudySession.position);
+        setStartFrom(fetchedStudySession.index);
         switch (fetchedStudySession.page) {
           case "cards": {
             setPage({ name: "cards" });
             break;
           }
           case "results": {
-            setPage({ name: "results", mastery: fetchedStudySession.mastery });
+            setPage({ name: "results", mastery: fetchedStudySession.mastery, oldMastery: fetchedStudySession.oldMastery });
             break;
           }
         }
@@ -66,29 +65,12 @@ function StudySection() {
     return (<div>Error: deck not found.</div>);
   }
 
-  function gotoResults() {
-    // setPage("results");
-    changeToResultsPage({
-      path: {
-        deckId,
-      },
-    }).then(res => {
-      if (res.data) {
-        setPage({ name: "results", mastery: res.data.mastery });
-      }
-    });
+  function gotoResults(oldMastery: number) {
+    setPage({ name: "results", mastery: null, oldMastery });
   }
   function rate(id: CardId, rating: Rating): RateResult {
-    reviewCard({
-      path: {
-        cardId: id,
-      },
-      body: {
-        rating,
-      },
-    });
     // TODO: Disable undo for now, implement later.
-    if (ratings.get(id) !== undefined) return "rated";
+    if (ratings.get(id) !== undefined) return "unrated";
 
     const newRatings = new Map(ratings);
     const ratingNow = newRatings.get(id);
@@ -108,18 +90,13 @@ function StudySection() {
     function goBackToCards() {
       setPage({ name: "cards" });
       setStartFrom(studySession.cards.length - 1);
-      syncStudyPage({
-        path: {
-          deckId,
-        },
-        body: {
-          page: "cards",
-        },
-      });
+    }
+    function setMastery(mastery: number) {
+      setPage({ name: "results", mastery, oldMastery: studySession.oldMastery });
     }
     switch (page.name) {
-      case "cards": return (<CardsSection studySession={studySession} startFrom={startFrom} ratings={ratings} gotoResults={gotoResults} rate={rate} />);
-      case "results": return (<ResultsSection ratings={ratings} studySession={studySession} mastery={page.mastery} goBackToCards={goBackToCards} />);
+      case "cards": return (<CardsPage studySession={studySession} startFrom={startFrom} ratings={ratings} gotoResults={gotoResults} setMastery={setMastery} rate={rate} />);
+      case "results": return (<ResultsPage ratings={ratings} studySession={studySession} mastery={page.mastery} oldMastery={page.oldMastery} goBackToCards={goBackToCards} />);
     }
   }
 
@@ -132,15 +109,16 @@ function StudySection() {
   );
 }
 
-interface CardsSectionProps {
+interface CardsPageProps {
   studySession: StudySessionResponse,
   startFrom: number,
   ratings: Map<CardId, Rating>,
-  gotoResults: () => void,
+  gotoResults: (oldMastery: number) => void,
+  setMastery: (mastery: number) => void,
   rate: (id: CardId, rating: Rating) => RateResult,
 }
 
-function CardsSection({ studySession, startFrom, ratings, gotoResults, rate: _rate }: CardsSectionProps) {
+function CardsPage({ studySession, startFrom, ratings, gotoResults, setMastery, rate: _rate }: CardsPageProps) {
   const cards = studySession.cards;
   const [index, setIndex] = useState(startFrom);
   const [revealed, setRevealed] = useState(false);
@@ -149,31 +127,30 @@ function CardsSection({ studySession, startFrom, ratings, gotoResults, rate: _ra
     if (i >= 0) {
       setIndex(i);
       setRevealed(false);
-      prevCard({
-        path: {
-          deckId: studySession.deckId,
-        },
-        body: {
-          cardId: cards[i].id,
-        },
-      });
     }
   }
-  function next() {
+  function nextCard() {
     const i = index + 1;
     if (i < cards.length) {
       setIndex(i);
       setRevealed(false);
-      nextCard({
+      return true;
+    } else {
+      return false;
+    }
+  }
+  function next() {
+    if (!nextCard()) {
+      gotoResults(studySession.oldMastery);
+      getDeckMastery({
         path: {
           deckId: studySession.deckId,
         },
-        body: {
-          cardId: cards[i].id,
-        },
+      }).then(res => {
+        if (res.data) {
+          setMastery(res.data.masteryPercentage);
+        }
       });
-    } else {
-      gotoResults();
     }
   }
   useEffect(() => {
@@ -193,7 +170,22 @@ function CardsSection({ studySession, startFrom, ratings, gotoResults, rate: _ra
     const card = cards[index];
     const rateResult = _rate(card.id, rating);
     if (rateResult === "rated") {
-      next();
+      const reviewCardPromise = reviewCard({
+        path: {
+          cardId: card.id,
+        },
+        body: {
+          rating,
+        },
+      });
+      if (!nextCard()) {
+        gotoResults(studySession.oldMastery);
+        reviewCardPromise.then(res => {
+          if (res.data) {
+            setMastery(res.data.mastery);
+          }
+        });
+      }
     }
   }
   function onRed() {
@@ -229,17 +221,45 @@ function CardsSection({ studySession, startFrom, ratings, gotoResults, rate: _ra
   );
 }
 
-interface ResultsSectionProps {
+interface ResultsPageProps {
   ratings: Map<CardId, Rating>;
   studySession: StudySessionResponse;
-  mastery: number;
+  mastery: number | null;
+  oldMastery: number;
   goBackToCards: () => void;
 }
 
-function ResultsSection({ ratings, studySession, mastery: _mastery, goBackToCards }: ResultsSectionProps) {
+function useMasteryAnim(oldMastery: number, newMastery: number) {
+  // const speed = Math.max(6, (newMastery - oldMastery) / 3);
+  const speed = Math.max(Math.pow(Math.abs(newMastery - oldMastery), 1/3) * 8, 1);
+  const [masteryAnim, setMasteryAnim] = useState(oldMastery);
+  useEffect(() => {
+    const timeStart = Date.now();
+    let handle = requestAnimationFrame(tick);
+    function tick() {
+      const elapsed = Date.now() - timeStart;
+      const next = Math.min(oldMastery + speed * elapsed / 1000, newMastery);
+      setMasteryAnim(next);
+      if (next < newMastery) {
+        handle = requestAnimationFrame(tick);
+      }
+    }
+    return () => {
+      cancelAnimationFrame(handle);
+    };
+  }, [oldMastery, newMastery]);
+  if (newMastery <= oldMastery) {
+    return newMastery;
+  }
+  return masteryAnim;
+}
+
+function ResultsPage({ ratings, studySession, mastery, oldMastery, goBackToCards }: ResultsPageProps) {
+  const masteryAnim = useMasteryAnim(oldMastery, mastery ?? oldMastery);
+  const masteryAnimRounded = Math.round(masteryAnim);
   const cardCount = studySession.cards.length;
   useKeyDown("ArrowLeft", goBackToCards);
-  function onClickBackToDashboard() {
+  function completeSession() {
     completeStudySession({
       path: {
         deckId: studySession.deckId,
@@ -258,36 +278,51 @@ function ResultsSection({ ratings, studySession, mastery: _mastery, goBackToCard
   }
   const skipped = cardCount - greens - yellows - reds;
   const rated = cardCount - skipped;
-  const score = rated === 0 ? null : Math.floor((greens * 2 + yellows) / (rated * 2) * 100);
-  const mastery = Math.ceil(_mastery);
+  const accuracy = rated === 0 ? null : Math.floor((greens * 2 + yellows) / (rated * 2) * 100);
+  const masteryColor = getMasteryColor(masteryAnim);
+
   return (
     <>
       <ResultsNav prev={goBackToCards} />
-      <table className="text-white font-jetbrains mr-6 mt-6 table-fixed border-separate border-spacing-x-3 border-spacing-y-1.5">
-        <tr><td className="text-right text-success-green">Mastered</td><td className="text-right">{greens}</td></tr>
-        <tr><td className="text-right text-warning-yellow">Working on</td><td className="text-right">{yellows}</td></tr>
-        <tr><td className="text-right text-danger-red">Forgot</td><td className="text-right">{reds}</td></tr>
-        <tr><td className="text-right text-gray-300">Skipped</td><td className="text-right">{skipped}</td></tr>
-      </table>
-
-      <table className="text-lg text-white font-jetbrains mr-1 mt-6 table-fixed border-separate border-spacing-x-3 border-spacing-y-1.5">
-        {score !== null && <tr><td className="text-right text-purple-500">Accuracy</td><td className="text-right">{score}%</td></tr>}
-        <tr><td className="text-right text-blue-500">Mastery</td><td className="text-right">{mastery}%</td></tr>
-      </table>
-
-      {/* <div className="flex flex-col items-end">
-
-        {score !== null && <div className="text-lg font-jetbrains flex gap-x-3 mt-6">
-          <div className="text-purple-500">Accuracy</div><div className="text-white">{score}%</div>
-        </div>}
-        <div className="text-lg font-jetbrains flex gap-x-3 mt-1">
-          <div className="text-blue-500">Mastery</div><div className="text-white">{mastery}%</div>
+      <div className="max-w-80 w-full mt-8">
+        <div className="text-center font-jetbrains text-lg">
+          <span className="text-right" style={{ color: masteryColor }}>Mastery</span><span className="text-right text-white ml-3">{masteryAnimRounded}%</span>
         </div>
-      </div> */}
-      <Link className="bg-accent text-white font-bold px-4 py-2 rounded mt-4 text-xl" to="/dashboard" onClick={onClickBackToDashboard}>Back to dashboard</Link>
+        <div className="bg-primary-light-grey rounded-full h-2 mt-1 grid">
+          <div className="h-full rounded-full" style={{ width: `${masteryAnim}%`, backgroundColor: `color-mix(in lab, black 15%, ${masteryColor})`, gridArea: "1 / 1" }}></div>
+          <div className="h-full rounded-full" style={{ width: `${oldMastery}%`, backgroundColor: masteryColor, gridArea: "1 / 1" }}></div>
+        </div>
+      </div>
+      <table className="text-white font-jetbrains mr-6 mt-8 table-fixed border-separate border-spacing-x-3 border-spacing-y-1.5">
+        <tbody>
+          <tr><td className="text-right text-success-green">Mastered</td><td className="text-right">{greens}</td></tr>
+          <tr><td className="text-right text-warning-yellow">Working on</td><td className="text-right">{yellows}</td></tr>
+          <tr><td className="text-right text-danger-red">Forgot</td><td className="text-right">{reds}</td></tr>
+          <tr><td className="text-right text-gray-300">Skipped</td><td className="text-right">{skipped}</td></tr>
+        </tbody>
+      </table>
+      {accuracy !== null && <div className="text-center font-jetbrains text-lg mt-3">
+        <span className="text-right text-purple-500">Accuracy</span><span className="text-right text-white ml-3">{accuracy}%</span>
+      </div>}
+      <Link className="bg-accent text-white font-bold px-4 py-2 rounded mt-6 text-xl" to="/dashboard" onClick={completeSession}>Complete session!</Link>
     </>
   );
 }
+
+function getMasteryColor(percent: number): string {
+  if (percent >= 60) {
+    return "var(--color-success-green)";
+  }
+  if (percent >= 40) {
+    const p = (percent - 40) / 20 * 100;
+    return `color-mix(in lab, ${p}% var(--color-success-green), var(--color-warning-yellow))`;
+  }
+  if (percent >= 20) {
+    const p = (percent - 20) / 20 * 100;
+    return `color-mix(in lab, ${p}% var(--color-warning-yellow), var(--color-danger-red))`;
+  }
+  return "var(--color-danger-red)";
+};
 
 interface CardNavProps {
   cardCount: number;

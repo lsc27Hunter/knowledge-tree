@@ -42,8 +42,7 @@ class StudySession(Base):
 
   id: Mapped[int] = mapped_column(init=False, primary_key=True)
   deck_id: Mapped[int] = mapped_column(ForeignKey("deck.id", ondelete="CASCADE"), unique=True)
-  current_position: Mapped[int]
-  page: Mapped[Literal["cards", "results"]]
+  old_mastery: Mapped[float]
   cards: Mapped[List["StudySessionCard"]] = relationship(init=False)
 
 class StudySessionCard(Base):
@@ -51,7 +50,7 @@ class StudySessionCard(Base):
 
   id: Mapped[int] = mapped_column(init=False, primary_key=True)
   card_id: Mapped[int] = mapped_column(ForeignKey("card.id", ondelete="CASCADE"))
-  position: Mapped[int]
+  index: Mapped[int]
   study_session_id: Mapped[int] = mapped_column(ForeignKey("study_session.id", ondelete="CASCADE"))
   rating: Mapped[Optional[Literal["red", "yellow", "green"]]]
   card: Mapped["Card"] = relationship(back_populates="study_session_card", init=False)
@@ -146,13 +145,15 @@ class CardReviewResponse(APISchema):
   easiness_factor: float
   interval: int
   next_review_date: datetime
+  mastery: float
 
 class StudySessionResponse(APISchema):
   deck_id: int
   cards: list["StudySessionCardResponse"]
-  position: int
+  index: int
   page: Literal["cards", "results"]
   mastery: float
+  old_mastery: float
 
 class StudySessionCardResponse(APISchema):
   id: int
@@ -160,20 +161,6 @@ class StudySessionCardResponse(APISchema):
   answer: str
   rating: Literal["red", "yellow", "green"] | None
 
-class SyncStudyPage(APISchema):
-  page: Literal["cards", "results"]
-
-class ChangeToResultsPageResponse(APISchema):
-  mastery: float
-
-class SyncStudyPageResponse(APISchema):
-  success: bool
 
 class CompleteStudySessionResponse(APISchema):
   success: bool
-
-class NextCard(APISchema):
-  card_id: int
-
-class PrevCard(APISchema):
-  card_id: int
