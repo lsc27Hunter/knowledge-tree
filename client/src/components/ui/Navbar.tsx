@@ -7,9 +7,10 @@ import UploadDeckButton from "./UploadDeckButton";
 interface NavbarProps {
   version: "Landing" | "Dashboard" | "Blank";
   userButton?: ReactNode;
+  onDeckCreated?: () => void;
 }
 
-export function Navbar({ version, userButton }: NavbarProps) {
+export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
   const isLanding = version === "Landing";
 
   return (
@@ -43,7 +44,7 @@ export function Navbar({ version, userButton }: NavbarProps) {
         </div>
       ) : version === "Dashboard" ? (
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap sm:gap-4">
-          <UploadDeckButton />
+          <UploadDeckButton onCreated={onDeckCreated} />
           {userButton}
         </div>
       ) : null}
