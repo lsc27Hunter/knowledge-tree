@@ -5,8 +5,8 @@ import ArrowRight from "../assets/arrow-right-thin.svg";
 import GreenCheckSquare from "../assets/green-check-square.svg";
 import YellowSquare from "../assets/yellow-square.svg";
 import RedXSquare from "../assets/red-x-square.svg";
-import { getDeckById, type Card as CardData } from "../mockData";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { reviewCard, study, type StudySessionResponse, completeStudySession, nextCard, prevCard, syncStudyPage, changeToResultsPage } from "../api";
 
 const StudyPage: React.FC = () => {
   return (
@@ -17,33 +17,79 @@ const StudyPage: React.FC = () => {
   );
 };
 
-type StudySectionPage = "cards" | "results";
+type StudySectionPage = { name: "cards" } | { name: "results", mastery: number }
 type CardId = number;
 type Rating = "red" | "yellow" | "green";
-type StartFrom = "front" | "back";
 type RateResult = "rated" | "unrated";
 
 function StudySection() {
   const deckId = parseInt(useParams().deckId!);
-  const [startFrom, setStartFrom] = useState<StartFrom>("front");
-  const [page, setPage] = useState<StudySectionPage>("cards");
+  const [studySession, setStudySession] = useState<StudySessionResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [startFrom, setStartFrom] = useState(0);
+  const [page, setPage] = useState<StudySectionPage>({ name: "cards" });
   const [ratings, setRatings] = useState<Map<CardId, Rating>>(new Map());
 
-  const deck = getDeckById(deckId);
-  if (deck == null) {
+  // const deck = getDeckById(deckId);
+  useEffect(() => {
+    study({ path: { deckId }}).then(res => {
+      if (res.data) {
+        const fetchedStudySession = res.data;
+        setStudySession(fetchedStudySession);
+        const fetchedRatings = new Map();
+        for (const card of fetchedStudySession.cards) {
+          if (card.rating != null) {
+            fetchedRatings.set(card.id, card.rating);
+          }
+        }
+        setStartFrom(fetchedStudySession.position);
+        switch (fetchedStudySession.page) {
+          case "cards": {
+            setPage({ name: "cards" });
+            break;
+          }
+          case "results": {
+            setPage({ name: "results", mastery: fetchedStudySession.mastery });
+            break;
+          }
+        }
+        setRatings(fetchedRatings);
+      }
+      setIsLoading(false);
+    })
+  }, [deckId]);
+  if (isLoading) {
+    return (<div>Loading...</div>);
+  }
+  if (studySession == null) {
     console.error("deck not found.");
     return (<div>Error: deck not found.</div>);
   }
-  const cards = deck.cards;
 
   function gotoResults() {
-    setPage("results");
-  }
-  function goBackToCards() {
-    setPage("cards");
-    setStartFrom("back");
+    // setPage("results");
+    changeToResultsPage({
+      path: {
+        deckId,
+      },
+    }).then(res => {
+      if (res.data) {
+        setPage({ name: "results", mastery: res.data.mastery });
+      }
+    });
   }
   function rate(id: CardId, rating: Rating): RateResult {
+    reviewCard({
+      path: {
+        cardId: id,
+      },
+      body: {
+        rating,
+      },
+    });
+    // TODO: Disable undo for now, implement later.
+    if (ratings.get(id) !== undefined) return "rated";
+
     const newRatings = new Map(ratings);
     const ratingNow = newRatings.get(id);
     let rateResult: RateResult | undefined;
@@ -58,38 +104,59 @@ function StudySection() {
     return rateResult;
   }
 
-  function getPage() {
-    switch (page) {
-      case "cards": return (<CardsSection cards={cards} startFrom={startFrom} ratings={ratings} gotoResults={gotoResults} rate={rate} />);
-      case "results": return (<ResultsSection ratings={ratings} cardCount={cards.length} goBackToCards={goBackToCards} />);
+  function getPage(studySession: StudySessionResponse) {
+    function goBackToCards() {
+      setPage({ name: "cards" });
+      setStartFrom(studySession.cards.length - 1);
+      syncStudyPage({
+        path: {
+          deckId,
+        },
+        body: {
+          page: "cards",
+        },
+      });
+    }
+    switch (page.name) {
+      case "cards": return (<CardsSection studySession={studySession} startFrom={startFrom} ratings={ratings} gotoResults={gotoResults} rate={rate} />);
+      case "results": return (<ResultsSection ratings={ratings} studySession={studySession} mastery={page.mastery} goBackToCards={goBackToCards} />);
     }
   }
 
   return (
     <div className="flex w-full justify-center">
       <div className="flex flex-col w-full max-w-140 items-center px-3 mt-21">
-        {getPage()}
+        {getPage(studySession)}
       </div>
     </div>
   );
 }
 
 interface CardsSectionProps {
-  cards: CardData[],
-  startFrom: StartFrom,
+  studySession: StudySessionResponse,
+  startFrom: number,
   ratings: Map<CardId, Rating>,
   gotoResults: () => void,
   rate: (id: CardId, rating: Rating) => RateResult,
 }
 
-function CardsSection({ cards, startFrom, ratings, gotoResults, rate: _rate }: CardsSectionProps) {
-  const [index, setIndex] = useState(toInitialIndex(startFrom, cards.length));
+function CardsSection({ studySession, startFrom, ratings, gotoResults, rate: _rate }: CardsSectionProps) {
+  const cards = studySession.cards;
+  const [index, setIndex] = useState(startFrom);
   const [revealed, setRevealed] = useState(false);
   function prev() {
     const i = index - 1;
     if (i >= 0) {
       setIndex(i);
       setRevealed(false);
+      prevCard({
+        path: {
+          deckId: studySession.deckId,
+        },
+        body: {
+          cardId: cards[i].id,
+        },
+      });
     }
   }
   function next() {
@@ -97,6 +164,14 @@ function CardsSection({ cards, startFrom, ratings, gotoResults, rate: _rate }: C
     if (i < cards.length) {
       setIndex(i);
       setRevealed(false);
+      nextCard({
+        path: {
+          deckId: studySession.deckId,
+        },
+        body: {
+          cardId: cards[i].id,
+        },
+      });
     } else {
       gotoResults();
     }
@@ -136,8 +211,9 @@ function CardsSection({ cards, startFrom, ratings, gotoResults, rate: _rate }: C
 
   if (cards.length === 0) {
     return (
-      <div className="flex justify-center items-center min-h-120">
-        <div className="text-white font-inter">No cards!</div>
+      <div className="flex flex-col items-center mt-20 min-h-120">
+        <div className="text-white text-lg font-inter">Nothing left to review! ✅</div>
+        <Link className="bg-accent text-white font-bold px-4 py-2 rounded mt-8 text-xl" to="/dashboard">Back to dashboard</Link>
       </div>
     );
   }
@@ -153,21 +229,23 @@ function CardsSection({ cards, startFrom, ratings, gotoResults, rate: _rate }: C
   );
 }
 
-function toInitialIndex(startFrom: StartFrom, cardCount: number) {
-  switch (startFrom) {
-    case "front": { return 0; }
-    case "back": { return cardCount - 1; }
-  }
-}
-
 interface ResultsSectionProps {
   ratings: Map<CardId, Rating>;
-  cardCount: number;
+  studySession: StudySessionResponse;
+  mastery: number;
   goBackToCards: () => void;
 }
 
-function ResultsSection({ ratings, cardCount, goBackToCards }: ResultsSectionProps) {
+function ResultsSection({ ratings, studySession, mastery: _mastery, goBackToCards }: ResultsSectionProps) {
+  const cardCount = studySession.cards.length;
   useKeyDown("ArrowLeft", goBackToCards);
+  function onClickBackToDashboard() {
+    completeStudySession({
+      path: {
+        deckId: studySession.deckId,
+      },
+    });
+  }
   let greens = 0;
   let yellows = 0;
   let reds = 0;
@@ -181,6 +259,7 @@ function ResultsSection({ ratings, cardCount, goBackToCards }: ResultsSectionPro
   const skipped = cardCount - greens - yellows - reds;
   const rated = cardCount - skipped;
   const score = rated === 0 ? null : Math.floor((greens * 2 + yellows) / (rated * 2) * 100);
+  const mastery = Math.ceil(_mastery);
   return (
     <>
       <ResultsNav prev={goBackToCards} />
@@ -191,9 +270,21 @@ function ResultsSection({ ratings, cardCount, goBackToCards }: ResultsSectionPro
         <tr><td className="text-right text-gray-300">Skipped</td><td className="text-right">{skipped}</td></tr>
       </table>
 
-      {score !== null && <div className="text-lg font-jetbrains flex gap-x-3 mt-6">
-        <div className="text-purple-500">Final Score</div><div className="text-white">{score}%</div>
-      </div>}
+      <table className="text-lg text-white font-jetbrains mr-1 mt-6 table-fixed border-separate border-spacing-x-3 border-spacing-y-1.5">
+        {score !== null && <tr><td className="text-right text-purple-500">Accuracy</td><td className="text-right">{score}%</td></tr>}
+        <tr><td className="text-right text-blue-500">Mastery</td><td className="text-right">{mastery}%</td></tr>
+      </table>
+
+      {/* <div className="flex flex-col items-end">
+
+        {score !== null && <div className="text-lg font-jetbrains flex gap-x-3 mt-6">
+          <div className="text-purple-500">Accuracy</div><div className="text-white">{score}%</div>
+        </div>}
+        <div className="text-lg font-jetbrains flex gap-x-3 mt-1">
+          <div className="text-blue-500">Mastery</div><div className="text-white">{mastery}%</div>
+        </div>
+      </div> */}
+      <Link className="bg-accent text-white font-bold px-4 py-2 rounded mt-4 text-xl" to="/dashboard" onClick={onClickBackToDashboard}>Back to dashboard</Link>
     </>
   );
 }
