@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 import httpx
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Header, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.algorithms import RSAAlgorithm
 
@@ -51,7 +51,7 @@ def _signing_key_for_token(token: str):
   raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
-def _decode_clerk_token(token: str) -> dict[str, Any]:
+def _decode_clerk_token(token: str, host: str | None) -> dict[str, Any]:
   try:
     signing_key = _signing_key_for_token(token)
     payload = jwt.decode(
@@ -69,19 +69,26 @@ def _decode_clerk_token(token: str) -> dict[str, Any]:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
   azp = payload.get("azp")
-  if clerk_authorized_parties and azp not in clerk_authorized_parties:
+  if _unauthorized_party(azp, host):
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
   return payload
 
+def _unauthorized_party(azp: Any | None, host: str | None):
+  # First check if the token matches an explicitly authorized party.
+  # Otherwise check if it matches the host, allowing Vercel preview deployments
+  # to be authorized.
+  return clerk_authorized_parties and azp not in clerk_authorized_parties and \
+    (host is None or "https://" + host != azp)
 
 async def get_current_user_id(
   credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+  host: Annotated[str | None, Header()] = None,
 ) -> str:
   if credentials is None:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-  payload = _decode_clerk_token(credentials.credentials)
+  payload = _decode_clerk_token(credentials.credentials, host)
   user_id = payload.get("sub")
   if not user_id:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
