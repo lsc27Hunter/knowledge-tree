@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from testcontainers.postgres import PostgresContainer
 
 # Override environment variables to prevent crashing when env is imported.
-os.environ["DATABASE_URL"] = "test://url"
+os.environ["DATABASE_URL"] = "postgresql://"
 os.environ["CLERK_SECRET_KEY"] = "test_clerk_secret_key"
 
 from auth import get_current_user_id
@@ -25,7 +25,17 @@ user_id = "test_user_id"
 
 async def test_create_deck(client: AsyncClient):
   response = await client.post(
-    "/api/decks", json={"name": "test name", "description": "test description"}
+    "/api/decks",
+    json={
+      "name": "test name",
+      "description": "test description",
+      "cards": [
+        {
+          "question": "test question",
+          "answer": "test answer",
+        },
+      ],
+    },
   )
   data = response.json()
 

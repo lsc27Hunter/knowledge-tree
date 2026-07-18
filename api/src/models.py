@@ -1,11 +1,11 @@
 # Database models and API schemas.
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -18,6 +18,7 @@ class Deck(Base):
   user_id: Mapped[str]
   name: Mapped[str]
   description: Mapped[str]
+  due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
 
@@ -28,10 +29,32 @@ class Card(Base):
   deck_id: Mapped[int] = mapped_column(ForeignKey("deck.id", ondelete="CASCADE"))
   question: Mapped[str]
   answer: Mapped[str]
-  n: Mapped[int]
-  ef: Mapped[float]
-  i: Mapped[int]
+  # SM-2 scheduling state
+  repetition_count: Mapped[int] = mapped_column(default=0)
+  easiness_factor: Mapped[float] = mapped_column(default=2.5)
+  interval: Mapped[int] = mapped_column(default=0)
+  next_review_date: Mapped[datetime] = mapped_column(default_factory=datetime.utcnow, server_default=func.now())
   deck: Mapped["Deck"] = relationship(back_populates="cards", init=False)
+  study_session_card: Mapped[Optional["StudySessionCard"]] = relationship(back_populates="card", init=False)
+
+class StudySession(Base):
+  __tablename__ = "study_session"
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  deck_id: Mapped[int] = mapped_column(ForeignKey("deck.id", ondelete="CASCADE"), unique=True)
+  old_mastery: Mapped[float]
+  cards: Mapped[List["StudySessionCard"]] = relationship(init=False)
+
+class StudySessionCard(Base):
+  __tablename__ = "study_session_card"
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  card_id: Mapped[int] = mapped_column(ForeignKey("card.id", ondelete="CASCADE"))
+  index: Mapped[int]
+  study_session_id: Mapped[int] = mapped_column(ForeignKey("study_session.id", ondelete="CASCADE"))
+  rating: Mapped[Optional[Literal["red", "yellow", "green"]]]
+  card: Mapped["Card"] = relationship(back_populates="study_session_card", init=False)
+  study_session: Mapped["StudySession"] = relationship(back_populates="cards", init=False)
 
 # Translates camelCase request fields to snake_case.
 # Translates snake_case response fields to camelCase.
@@ -46,14 +69,24 @@ class APISchema(BaseModel):
 class DeckListResponse(APISchema):
   id: int
   name: str
+  description: str | None
+  due_date: datetime | None
   mastery: int
   cards_due_today: int
   total_cards: int
   last_studied_at: datetime | None
 
+class CardCreate(APISchema):
+  question: str
+  answer: str
+
 class DeckCreate(APISchema):
   name: str
   description: str
+  due_date: datetime | None = None
+  last_studied_at: datetime | None = None
+  mastery: int = 0
+  cards: list[CardCreate] = Field(min_length=1)
 
 class DeckCreateResponse(APISchema):
   id: int
@@ -71,16 +104,20 @@ class DeckGetResponse(APISchema):
 class DeckDeleteResponse(APISchema):
   success: bool
 
+class DeckMasteryResponse(APISchema):
+  mastery_percentage: float
+
+class DeckUploadResponse(APISchema):
+  deck_id: int
+  cards_created: int
+  message: str
+
 class CardListResponse(APISchema):
   id: int
   question: str
   answer: str
   mastery_score: int
   next_review_date: datetime
-
-class CardCreate(APISchema):
-  question: str
-  answer: str
 
 class CardCreateResponse(APISchema):
   id: int
@@ -97,4 +134,33 @@ class CardUpdateResponse(APISchema):
   answer: str
 
 class CardDeleteResponse(APISchema):
+  success: bool
+
+class CardReviewRequest(APISchema):
+  rating: Literal["red", "yellow", "green"] = Field(description='UI rating: "red", "yellow", or "green"')
+
+class CardReviewResponse(APISchema):
+  id: int
+  repetition_count: int
+  easiness_factor: float
+  interval: int
+  next_review_date: datetime
+  mastery: float
+
+class StudySessionResponse(APISchema):
+  deck_id: int
+  cards: list["StudySessionCardResponse"]
+  index: int
+  page: Literal["cards", "results"]
+  mastery: float
+  old_mastery: float
+
+class StudySessionCardResponse(APISchema):
+  id: int
+  question: str
+  answer: str
+  rating: Literal["red", "yellow", "green"] | None
+
+
+class CompleteStudySessionResponse(APISchema):
   success: bool
