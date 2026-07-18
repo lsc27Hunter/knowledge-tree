@@ -38,6 +38,15 @@ cd api
 uv add <package>
 ```
 
+### Testing
+Backend tests will run on every push to GitHub.
+
+To run tests locally, you must have Docker installed and running. Then:
+```
+cd api
+uv run pytest
+```
+
 ### Database (Supabase) connection
 
 **Local `.env.local`** — use the **Session pooler** string (IPv4), not Direct connection:
