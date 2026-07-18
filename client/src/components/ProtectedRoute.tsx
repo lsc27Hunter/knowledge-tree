@@ -1,13 +1,14 @@
 import { useAuth } from "@clerk/react";
 import { Navigate, Outlet } from "react-router-dom";
+import { Spinner } from "./ui/Spinner";
 
 export function ProtectedRoute() {
   const { isLoaded, isSignedIn } = useAuth();
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-primary-light-grey font-inter">
-        Loading...
+      <div className="flex items-center justify-center py-8">
+        <Spinner />
       </div>
     );
   }

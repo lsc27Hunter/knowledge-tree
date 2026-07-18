@@ -1,21 +1,68 @@
 import { UserButton, useUser } from "@clerk/react";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { getDecks, type DeckListResponse } from "../api";
 
 import { Navbar } from "../components/ui/Navbar";
 import { DeckCard } from "../components/ui/DeckCard";
+import { Spinner } from "../components/ui/Spinner";
 
 import Checkmark from "../assets/checkmark-circle.svg";
 import StarBadge from "../assets/star-badge.svg";
 import Danger from "../assets/danger.svg";
 
+type DashboardDeck = {
+  id: number;
+  name: string;
+  description: string | null;
+  mastery: number;
+  dueDate: string | null;
+  totalCards: number;
+  lastStudiedAt: string;
+};
+
+function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
+  return {
+    id: deck.id,
+    name: deck.name,
+    description: deck.description,
+    mastery: deck.mastery / 100,
+    dueDate: deck.dueDate,
+    totalCards: deck.totalCards,
+    lastStudiedAt: deck.lastStudiedAt ?? new Date(0).toISOString(),
+  };
+}
+
 export default function DashboardPage() {
   const { isLoaded, user } = useUser();
   const [sortingOption, setSortingOption] = useState("Due Date");
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [decks, setDecks] = useState<DashboardDeck[]>([]);
+  const [decksError, setDecksError] = useState<string | null>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const sortingOptions = ["Due Date", "Mastery", "Last Studied"];
+
+  const loadDecks = useCallback(async () => {
+    if (!isLoaded) {
+      return;
+    }
+
+    try {
+      setDecksError(null);
+      const result = await getDecks();
+
+      if (result.error) {
+        throw result.error;
+      }
+      setDecks((result.data ?? []).map(toDashboardDeck));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load decks.";
+      setDecksError(message);
+    }
+  }, [isLoaded]);
 
   useEffect(() => {
     const closeMenuOnOutsideClick = (event: MouseEvent | TouchEvent) => {
@@ -36,10 +83,17 @@ export default function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+    void loadDecks();
+  }, [isLoaded, loadDecks]);
+
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-background px-6 py-10 text-primary-light-grey font-inter">
-        Loading...
+      <div className="flex items-center justify-center py-8">
+        <Spinner />
       </div>
     );
   }
@@ -53,47 +107,7 @@ export default function DashboardPage() {
     currentStreak: 7, // to do: figure out how to calculate this from backend data
   };
 
-  // to do: fetch decks from backend, remove mock demo data
-  const decks = [
-    {
-      id: 1,
-      name: "OperatingSystemsLec1-09/23",
-      description: "Operating Systems Cumulative Deck",
-      mastery: 0.27,
-      dueDate: null,
-      totalCards: 23,
-      lastStudiedAt: "2023-06-25T12:00:00Z",
-    },
-    {
-      id: 2,
-      name: "Spanish Verbs",
-      description: null,
-      mastery: 0.5,
-      dueDate: null,
-      totalCards: 10,
-      lastStudiedAt: "2026-06-25T12:00:00Z",
-    },
-    {
-      id: 3,
-      name: "Discrete Structures",
-      description: null,
-      mastery: 1,
-      dueDate: "2026-07-06:00:00Z",
-      totalCards: 40,
-      lastStudiedAt: "2026-06-25T12:00:00Z",
-    },
-    {
-      id: 4,
-      name: "Databases & SQL",
-      description: null,
-      mastery: 1,
-      dueDate: null,
-      totalCards: 40,
-      lastStudiedAt: "2026-06-25T12:00:00Z",
-    },
-  ];
-
-  decks.sort((a, b) => {
+  const sortedDecks = [...decks].sort((a, b) => {
     if (sortingOption === "Due Date") {
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
@@ -109,14 +123,16 @@ export default function DashboardPage() {
     return 0;
   });
 
-  const deckCount = decks.length;
+  const deckCount = sortedDecks.length;
 
-  const cardCount = decks.reduce((acc, deck) => acc + deck.totalCards, 0);
+  const cardCount = sortedDecks.reduce((acc, deck) => acc + deck.totalCards, 0);
 
   const averageMastery =
-    decks.reduce((acc, deck) => acc + deck.mastery, 0) / deckCount;
+    deckCount === 0
+      ? 0
+      : sortedDecks.reduce((acc, deck) => acc + deck.mastery, 0) / deckCount;
 
-  const decksDueThisWeek = decks.filter((deck) => {
+  const decksDueThisWeek = sortedDecks.filter((deck) => {
     if (!deck.dueDate) return false;
 
     const dueDateOnly = deck.dueDate.slice(0, 10);
@@ -135,7 +151,13 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <Navbar version="Dashboard" userButton={<UserButton />} />
+      <Navbar
+        version="Dashboard"
+        userButton={<UserButton />}
+        onDeckCreated={() => {
+          void loadDecks();
+        }}
+      />
 
       <h2 className="font-inter text-white text-title-medium font-medium mx-15 mt-15 sm:text-regular">
         {userData.userFirstName
@@ -148,6 +170,11 @@ export default function DashboardPage() {
         <span aria-hidden="true">&bull;</span> {cardCount}{" "}
         {cardCount === 1 ? "card" : "cards"}
       </div>
+      {decksError ? (
+        <div className="mx-15 mt-3 text-small text-danger-red">
+          {decksError}
+        </div>
+      ) : null}
       <div className="mt-10 ml-4 w-[calc(100%-2rem)] sm:ml-15 sm:w-7/10">
         <div className="flex flex-col gap-6 rounded-2xl bg-primary-grey p-6 text-white font-jetbrains sm:flex-row sm:items-center sm:justify-between sm:p-9">
           <div className="flex flex-row items-center">
@@ -225,7 +252,7 @@ export default function DashboardPage() {
         </div>
       </div>
       <div className="mx-15 mt-15 grid grid-cols-1 gap-15 md:grid-cols-2 xl:grid-cols-3">
-        {decks.map((deck) => (
+        {sortedDecks.map((deck) => (
           <DeckCard key={deck.id} deckData={deck} />
         ))}
       </div>

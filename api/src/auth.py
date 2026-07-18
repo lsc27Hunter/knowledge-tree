@@ -59,6 +59,11 @@ def _decode_clerk_token(token: str, host: str | None) -> dict[str, Any]:
       signing_key,
       algorithms=["RS256"],
       options={"verify_aud": False},
+
+      # Add leeway so that tokens with an iat (issued at) that is just in the future
+      # won't be rejected, preventing jwt.exceptions.ImmatureSignatureError.
+      # https://github.com/jpadilla/pyjwt/issues/814
+      leeway=1,
     )
   except jwt.PyJWTError:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")

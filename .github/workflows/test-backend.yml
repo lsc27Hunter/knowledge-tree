@@ -1,0 +1,22 @@
+name: Test Backend
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: uv
+      uses: astral-sh/setup-uv@v8.3.2
+    - name: Python 3.13
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - name: Install dependencies
+      run: uv sync --dev
+      working-directory: api
+    - name: Pytest
+      run: uv run pytest
+      working-directory: api
