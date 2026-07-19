@@ -1,7 +1,5 @@
-import { Dialog } from "@base-ui/react";
 import Papa from "papaparse";
-import DropZone from "../../assets/drop-zone.svg";
-import X from "../../assets/x.svg";
+import DropZoneIcon from "../../assets/drop-zone.svg";
 import React, {
   useEffect,
   useState,
@@ -16,6 +14,7 @@ import {
   type DeckCreate,
   type CardCreate,
 } from "../../api";
+import { ModalHeaderMain, ModalHeaderShell, ModalShell, useModalState, type ModalState } from "./Modal";
 
 interface UploadDeckButtonProps {
   onCreated?: () => void;
@@ -24,10 +23,7 @@ interface UploadDeckButtonProps {
 export default function UploadDeckButton({
   onCreated,
 }: UploadDeckButtonProps = {}) {
-  const [isOpen, setIsOpen] = useState(false);
-  function open() {
-    setIsOpen(true);
-  }
+  const modalState = useModalState();
   return (
     <>
       <Button
@@ -35,35 +31,29 @@ export default function UploadDeckButton({
         width="fit"
         color="accent"
         textColor="white"
-        onClick={open}
+        onClick={modalState.open}
         icon={UploadIcon}
         iconPosition="right"
         iconOnlyOnMobile
       />
-      <Modal isOpen={isOpen} setIsOpen={setIsOpen} onCreated={onCreated} />
+      <Modal modalState={modalState} onCreated={onCreated} />
     </>
   );
 }
 
-interface ModalState {
-  isOpen: boolean;
-  setIsOpen(open: boolean): void;
+interface ModalProps {
+  modalState: ModalState;
   onCreated?: () => void;
 }
 
-function Modal({ isOpen, setIsOpen, onCreated }: ModalState) {
+function Modal({ modalState, onCreated }: ModalProps) {
   return (
-    <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-70" />
-        <Dialog.Popup className="fixed top-1/2 left-1/2 flex w-fit max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 text-white bg-background border border-gray-600 rounded-2xl">
-          <ModalContent
-            onClose={() => setIsOpen(false)}
-            onCreated={onCreated}
-          />
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <ModalShell state={modalState}>
+      <ModalContent
+        onClose={modalState.close}
+        onCreated={onCreated}
+      />
+    </ModalShell>
   );
 }
 
@@ -125,37 +115,11 @@ interface UploadPageProps {
 }
 
 function UploadPage({ onChooseFile, onManualCreate }: UploadPageProps) {
-  const chooseFile: ChangeEventHandler<HTMLInputElement, HTMLInputElement> = (
-    e,
-  ) => {
-    const files = e.target.files;
-    if (files === null) return;
-    if (files.length === 0) return;
-    const file = files[0];
-    onChooseFile(file);
-  };
   return (
     <>
-      <div className="border-b border-gray-600 p-4">
-        <HeaderTop />
-      </div>
+      <UploadHeader />
       <div className="p-8">
-        <input
-          className="-z-1 absolute opacity-0"
-          id="file-upload"
-          type="file"
-          onChange={chooseFile}
-        />
-        <label
-          className="w-120 max-w-full cursor-pointer py-12 gap-y-6 flex flex-col items-center border border-dashed border-gray-600 rounded-lg"
-          htmlFor="file-upload"
-        >
-          <img className="h-20" src={DropZone} alt="close" />
-          <div className="text-white font-semibold">
-            Drop your Study Guide Here
-          </div>
-          <div className="text-primary-light-grey">or click to browse</div>
-        </label>
+        <DropZone id="file-upload" onChooseFile={onChooseFile} />
       </div>
       <div className="flex flex-row justify-center gap-x-4 mb-15">
         <div className="text-center text-primary-light-grey">
@@ -169,6 +133,69 @@ function UploadPage({ onChooseFile, onManualCreate }: UploadPageProps) {
           Manually create deck
         </button>
       </div>
+    </>
+  );
+}
+
+interface DropZoneProps {
+  id: string;
+  onChooseFile(file: File): void;
+}
+
+function DropZone({ id, onChooseFile }: DropZoneProps) {
+  const [dragOver, setDragOver] = useState(false);
+  const chooseFile: ChangeEventHandler<HTMLInputElement, HTMLInputElement> = (
+    e,
+  ) => {
+    const files = e.target.files;
+    if (files === null) return;
+    if (files.length === 0) return;
+    const file = files[0];
+    onChooseFile(file);
+  };
+  const onDrop: React.DragEventHandler<HTMLLabelElement> = e => {
+    // Prevent browser's default behavior of downloading the file.
+    e.preventDefault();
+
+    for (const item of e.dataTransfer.items) {
+      const file = item.getAsFile();
+      if (file) {
+        onChooseFile(file);
+        return;
+      }
+    }
+  };
+  const onDragOver: React.DragEventHandler<HTMLLabelElement> = e => {
+    // Must cancel dragover event for drop event to fire.
+    e.preventDefault();
+
+    setDragOver(true);
+  }
+  function onDragLeave() {
+    setDragOver(false);
+  }
+  return (
+    <>
+      <input
+        className="-z-1 absolute opacity-0"
+        id={id}
+        type="file"
+        onChange={chooseFile}
+      />
+      <label
+        className={`w-120 max-w-full cursor-pointer py-12 gap-y-6 flex flex-col items-center border border-dashed border-gray-600 rounded-lg ${dragOver ? "bg-primary-grey" : ""}`}
+        htmlFor="file-upload"
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+      >
+        {/* Disabling pointer events prevents the dragleave event from firing when dragging over child elements. */}
+        <img className="pointer-events-none h-20" src={DropZoneIcon} alt="close" />
+        <div className="pointer-events-none text-white font-semibold">
+          Drop your Study Guide Here
+        </div>
+        <div className="pointer-events-none text-primary-light-grey">or click to browse</div>
+      </label>
     </>
   );
 }
@@ -200,7 +227,6 @@ function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
           cards.push({ question, answer });
         }
         setParsedCards(cards);
-        console.log(cards);
       },
     });
   }, [fileText]);
@@ -227,16 +253,10 @@ function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
       setIsSubmitting(false);
     }
   };
-  const parsedCountDisplay =
-    parsedCards === null ? "Loading..." : `${parsedCards.length} cards parsed`;
+  const buttonParsedCountDisplay = parsedCards === null ? "Loading..." : `${parsedCards.length} cards`;
   return (
     <div className="relative w-200 max-w-full">
-      <div className="border-b border-gray-600 p-4 flex flex-col">
-        <HeaderTop />
-        <div className="text-primary-light-grey leading-none">
-          {parsedCountDisplay}
-        </div>
-      </div>
+      <ConfirmHeader parsedCards={parsedCards} />
       <div className="px-8 pt-4 pb-8 font-inter max-h-100 overflow-y-auto">
         <form className="flex flex-col" onSubmit={onSubmit}>
           <div className="flex">
@@ -290,7 +310,7 @@ function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
           >
             {isSubmitting
               ? "Uploading..."
-              : `Create Deck (${parsedCards === null ? "Loading..." : `${parsedCards.length} cards`})`}
+              : `Create Deck (${buttonParsedCountDisplay})`}
           </button>
         </form>
         <div className="mt-3 font-semibold text-primary-light-grey">
@@ -301,23 +321,30 @@ function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
             <div>Loading</div>
           ) : (
             parsedCards.map((card, i) => (
-              <div
-                className="bg-primary-grey border border-primary-light-grey rounded"
-                key={i}
-              >
-                <div className="border-b border-primary-light-grey p-4">
-                  <span className="text-primary-light-grey">Q</span>
-                  <span className="ml-2 text-white">{card.question}</span>
-                </div>
-                <div className="p-4">
-                  <div className="text-success-green">A</div>
-                  <div className="whitespace-pre-line text-primary-light-grey mt-4">
-                    {card.answer}
-                  </div>
-                </div>
-              </div>
+              <CardPreview key={i} card={card} />
             ))
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface CardPreviewProps {
+  card: ParsedCard;
+}
+
+function CardPreview({ card }: CardPreviewProps) {
+  return (
+    <div className="bg-primary-grey border border-primary-light-grey rounded">
+      <div className="border-b border-primary-light-grey p-4">
+        <span className="text-primary-light-grey">Q</span>
+        <span className="ml-2 text-white">{card.question}</span>
+      </div>
+      <div className="p-4">
+        <div className="text-success-green">A</div>
+        <div className="whitespace-pre-line text-primary-light-grey mt-4">
+          {card.answer}
         </div>
       </div>
     </div>
@@ -402,9 +429,7 @@ function ManualPage({ onSuccess }: ManualPageProps) {
 
   return (
     <div className="relative w-200 max-w-full">
-      <div className="border-b border-gray-600 p-4">
-        <HeaderTop />
-      </div>
+      <ManualHeader />
       <div className="px-8 pt-4 pb-8 font-inter max-h-[75vh] overflow-y-auto">
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>
           <div className="flex gap-3">
@@ -520,27 +545,38 @@ function ManualPage({ onSuccess }: ManualPageProps) {
   );
 }
 
-function HeaderTop() {
+function ManualHeader() {
   return (
-    <div className="flex justify-between items-center">
-      <Title />
-      <CloseButton />
-    </div>
+    <ModalHeaderShell>
+      <ModalHeaderMain>Create study deck</ModalHeaderMain>
+    </ModalHeaderShell>
   );
 }
 
-function Title() {
+function UploadHeader() {
   return (
-    <Dialog.Title className="font-inter font-bold text-white text-lg">
-      Upload study deck
-    </Dialog.Title>
+    <ModalHeaderShell>
+      <UploadHeaderMain />
+    </ModalHeaderShell>
   );
 }
 
-function CloseButton() {
+function ConfirmHeader({ parsedCards }: { parsedCards: ParsedCard[] | null }) {
+  const parsedCountDisplay =
+    parsedCards === null ? "Loading..." : `${parsedCards.length} cards parsed`;
   return (
-    <Dialog.Close className="cursor-pointer p-1">
-      <img className="h-4" src={X} alt="close" />
-    </Dialog.Close>
+    <ModalHeaderShell>
+      <UploadHeaderMain />
+      <div className="text-primary-light-grey leading-none">
+        {parsedCountDisplay}
+      </div>
+    </ModalHeaderShell>
   );
 }
+
+function UploadHeaderMain() {
+  return (
+    <ModalHeaderMain>Upload study deck</ModalHeaderMain>
+  );
+}
+

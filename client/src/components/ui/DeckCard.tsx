@@ -5,10 +5,10 @@ import { deleteDeck } from "../../api";
 
 import ArrowRight from "../../assets/arrow-right.svg";
 import Logo from "../../assets/git_knowledgetree-icon.svg";
-import Edit from "../../assets/edit.svg";
 import Book from "../../assets/book.svg";
 import Danger from "../../assets/danger.svg";
 import Trash from "../../assets/trash.svg";
+import EditDeckButton from "./EditDeckButton";
 
 interface DeckCardProps {
   deckData: {
@@ -43,15 +43,7 @@ export function DeckCard({ deckData }: DeckCardProps) {
         </div>
         <div className="flex-1" />
         <div className="flex flex-row">
-          <Button
-            text=""
-            width="fit"
-            color="primary-grey"
-            textColor="white"
-            icon={Edit}
-            iconPosition="right"
-            iconSize="w-6 h-6"
-          />
+          <EditDeckButton deckId={deckId} />
           <Button
             text=""
             width="fit"

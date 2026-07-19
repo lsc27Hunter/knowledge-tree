@@ -93,13 +93,38 @@ class DeckCreateResponse(APISchema):
   name: str
   description: str
 
+class DeckUpdate(APISchema):
+  name: str
+  description: str
+  due_date: datetime | None
+  cards: list["CardDeckUpdate"] = Field(min_length=1)
+
+class CardDeckUpdate(APISchema):
+  id: int | None
+  question: str
+  answer: str
+
+class DeckUpdateResponse(APISchema):
+  id: int
+  name: str
+  description: str
+  due_date: datetime | None
+
 class DeckGetResponse(APISchema):
   id: int
   name: str
+  description: str
+  due_date: datetime | None
+  cards: list["CardDeckGetResponse"]
   mastery: int
   cards_due_today: int
   total_cards: int
   retention_rate: int
+
+class CardDeckGetResponse(APISchema):
+  id: int
+  question: str
+  answer: str
 
 class DeckDeleteResponse(APISchema):
   success: bool
