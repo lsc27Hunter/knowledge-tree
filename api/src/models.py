@@ -21,6 +21,7 @@ class Deck(Base):
   due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
+  study_session: Mapped[Optional["StudySession"]] = relationship(init=False)
 
 class Card(Base):
   __tablename__ = "card"
@@ -146,6 +147,7 @@ class CardReviewResponse(APISchema):
   interval: int
   next_review_date: datetime
   mastery: float
+  cards_left: bool
 
 class StudySessionResponse(APISchema):
   deck_id: int
@@ -154,6 +156,7 @@ class StudySessionResponse(APISchema):
   page: Literal["cards", "results"]
   mastery: float
   old_mastery: float
+  cards_left: bool
 
 class StudySessionCardResponse(APISchema):
   id: int

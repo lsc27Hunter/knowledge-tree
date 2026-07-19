@@ -29,8 +29,9 @@ function StudySection() {
   const [startFrom, setStartFrom] = useState(0);
   const [page, setPage] = useState<StudySectionPage>({ name: "cards" });
   const [ratings, setRatings] = useState<Map<CardId, Rating>>(new Map());
+  const [cardsLeft, setCardsLeft] = useState(true);
 
-  useEffect(() => {
+  function beginStudy() {
     study({ path: { deckId }}).then(res => {
       if (res.data) {
         const fetchedStudySession = res.data;
@@ -48,14 +49,23 @@ function StudySection() {
             break;
           }
           case "results": {
-            setPage({ name: "results", mastery: fetchedStudySession.mastery, oldMastery: fetchedStudySession.oldMastery });
+            setPage({
+              name: "results",
+              mastery: fetchedStudySession.mastery,
+              oldMastery: fetchedStudySession.oldMastery,
+            });
             break;
           }
         }
         setRatings(fetchedRatings);
+        setCardsLeft(fetchedStudySession.cardsLeft);
       }
       setIsLoading(false);
-    })
+    });
+  }
+
+  useEffect(() => {
+    beginStudy();
   }, [deckId]);
   if (isLoading) {
     return (<div>Loading...</div>);
@@ -65,8 +75,9 @@ function StudySection() {
     return (<div>Error: deck not found.</div>);
   }
 
-  function gotoResults(oldMastery: number) {
+  function gotoResults(oldMastery: number, newCardsLeft: boolean = cardsLeft ) {
     setPage({ name: "results", mastery: null, oldMastery });
+    setCardsLeft(newCardsLeft);
   }
   function rate(id: CardId, rating: Rating): RateResult {
     // TODO: Disable undo for now, implement later.
@@ -91,18 +102,19 @@ function StudySection() {
       setPage({ name: "cards" });
       setStartFrom(studySession.cards.length - 1);
     }
-    function setMastery(mastery: number) {
+    function updateResultsPage(mastery: number, newCardsLeft: boolean = cardsLeft) {
       setPage({ name: "results", mastery, oldMastery: studySession.oldMastery });
+      setCardsLeft(newCardsLeft);
     }
     switch (page.name) {
-      case "cards": return (<CardsPage studySession={studySession} startFrom={startFrom} ratings={ratings} gotoResults={gotoResults} setMastery={setMastery} rate={rate} />);
-      case "results": return (<ResultsPage ratings={ratings} studySession={studySession} mastery={page.mastery} oldMastery={page.oldMastery} goBackToCards={goBackToCards} />);
+      case "cards": return (<CardsPage studySession={studySession} startFrom={startFrom} ratings={ratings} gotoResults={gotoResults} updateResultsPage={updateResultsPage} rate={rate} />);
+      case "results": return (<ResultsPage ratings={ratings} studySession={studySession} mastery={page.mastery} oldMastery={page.oldMastery} cardsLeft={cardsLeft} goBackToCards={goBackToCards} beginStudy={beginStudy} />);
     }
   }
 
   return (
     <div className="flex w-full justify-center">
-      <div className="flex flex-col w-full max-w-140 items-center px-3 mt-21">
+      <div className="flex flex-col w-full max-w-140 items-center px-3 mt-14">
         {getPage(studySession)}
       </div>
     </div>
@@ -113,12 +125,12 @@ interface CardsPageProps {
   studySession: StudySessionResponse,
   startFrom: number,
   ratings: Map<CardId, Rating>,
-  gotoResults: (oldMastery: number) => void,
-  setMastery: (mastery: number) => void,
-  rate: (id: CardId, rating: Rating) => RateResult,
+  gotoResults(oldMastery: number, cardsLeft?: boolean): void,
+  updateResultsPage(mastery: number, cardsLeft?: boolean): void,
+  rate(id: CardId, rating: Rating): RateResult,
 }
 
-function CardsPage({ studySession, startFrom, ratings, gotoResults, setMastery, rate: _rate }: CardsPageProps) {
+function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResultsPage, rate: _rate }: CardsPageProps) {
   const cards = studySession.cards;
   const [index, setIndex] = useState(startFrom);
   const [revealed, setRevealed] = useState(false);
@@ -148,7 +160,7 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, setMastery, 
         },
       }).then(res => {
         if (res.data) {
-          setMastery(res.data.masteryPercentage);
+          updateResultsPage(res.data.masteryPercentage);
         }
       });
     }
@@ -179,10 +191,10 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, setMastery, 
         },
       });
       if (!nextCard()) {
-        gotoResults(studySession.oldMastery);
+        gotoResults(studySession.oldMastery, false);
         reviewCardPromise.then(res => {
           if (res.data) {
-            setMastery(res.data.mastery);
+            updateResultsPage(res.data.mastery, res.data.cardsLeft);
           }
         });
       }
@@ -226,7 +238,9 @@ interface ResultsPageProps {
   studySession: StudySessionResponse;
   mastery: number | null;
   oldMastery: number;
-  goBackToCards: () => void;
+  cardsLeft: boolean;
+  beginStudy(): void;
+  goBackToCards(): void;
 }
 
 function useMasteryAnim(oldMastery: number, newMastery: number) {
@@ -254,12 +268,23 @@ function useMasteryAnim(oldMastery: number, newMastery: number) {
   return masteryAnim;
 }
 
-function ResultsPage({ ratings, studySession, mastery, oldMastery, goBackToCards }: ResultsPageProps) {
+function ResultsPage({ ratings, studySession, mastery, oldMastery, cardsLeft, beginStudy, goBackToCards }: ResultsPageProps) {
   const masteryAnim = useMasteryAnim(oldMastery, mastery ?? oldMastery);
   const masteryAnimRounded = Math.round(masteryAnim);
   const cardCount = studySession.cards.length;
   useKeyDown("ArrowLeft", goBackToCards);
-  function completeSession() {
+  function continueThisDeck() {
+    completeStudySession({
+      path: {
+        deckId: studySession.deckId,
+      },
+    }).then(res => {
+      if (res.data) {
+        beginStudy();
+      }
+    });
+  }
+  function finishReview() {
     completeStudySession({
       path: {
         deckId: studySession.deckId,
@@ -301,10 +326,14 @@ function ResultsPage({ ratings, studySession, mastery, oldMastery, goBackToCards
           <tr><td className="text-right text-gray-300">Skipped</td><td className="text-right">{skipped}</td></tr>
         </tbody>
       </table>
-      {accuracy !== null && <div className="text-center font-jetbrains text-lg mt-3">
+      <div className={`text-center font-jetbrains text-lg mt-3 ${accuracy === null ? "invisible" : ""}`}>
         <span className="text-right text-purple-500">Accuracy</span><span className="text-right text-white ml-3">{accuracy}%</span>
-      </div>}
-      <Link className="bg-accent text-white font-bold px-4 py-2 rounded mt-6 text-xl" to="/dashboard" onClick={completeSession}>Complete session!</Link>
+      </div>
+      {cardsLeft ?
+        <button className="cursor-pointer bg-accent text-white font-bold w-52 text-center py-2 rounded mt-6 text-lg" onClick={continueThisDeck}>Continue this deck</button> :
+        <div className="text-white text-lg font-bold mt-6">Deck complete!</div>
+      }
+      <Link className="bg-accent text-white font-bold w-52 text-center py-2 rounded mt-4 mb-2 text-xl" to="/dashboard" onClick={finishReview}>Finish review</Link>
     </>
   );
 }
@@ -436,7 +465,7 @@ function Card({ className = "", question, answer, revealed, rating, toggleReveal
   const borderColor = toBorderColor(rating);
   const bgColor = useKeyDown(" ", toggleRevealed) ? "bg-[#222]" : "bg-primary-grey";
   return (
-    <div className={`flex flex-col pt-11 pb-6 px-6 font-jetbrains items-center justify-between ${bgColor} active:bg-[#222] border ${borderColor} rounded w-full min-h-60 cursor-pointer select-none ${className}`}
+    <div className={`flex flex-col pt-11 pb-6 px-6 font-jetbrains items-center justify-between ${bgColor} active:bg-[#222] border ${borderColor} rounded w-full min-h-64 cursor-pointer select-none ${className}`}
       onClick={toggleRevealed}>
         {revealed ? 
           <div className="text-white whitespace-pre-line">{answer}</div> :
