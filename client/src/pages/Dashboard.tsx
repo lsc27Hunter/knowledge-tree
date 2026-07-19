@@ -145,7 +145,7 @@ export default function DashboardPage() {
   });
 
   return (
-    <div>
+    <div className="mb-4">
       <Navbar
         version="Dashboard"
         userButton={<UserButton />}

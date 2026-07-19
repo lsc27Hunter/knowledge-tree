@@ -12,7 +12,7 @@ export function ModalShell({ state, children }: ModalShellProps) {
     <Dialog.Root open={state.isOpen} onOpenChange={state.setIsOpen}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-70" />
-        <Dialog.Popup className="fixed top-1/2 left-1/2 flex w-fit max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 text-white bg-background border border-gray-600 rounded-2xl">
+        <Dialog.Popup className="fixed top-1/2 left-1/2 flex w-fit max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col text-white bg-background border border-gray-600 rounded-2xl">
           {children}
         </Dialog.Popup>
       </Dialog.Portal>

@@ -7,7 +7,7 @@ import React, {
   type SubmitEventHandler,
 } from "react";
 import { Button } from "./Button";
-import UploadIcon from "../../assets/upload-file.svg";
+import PlusIcon from "../../assets/plus.svg";
 import {
   uploadDeck,
   createDeck,
@@ -16,23 +16,24 @@ import {
 } from "../../api";
 import { ModalHeaderMain, ModalHeaderShell, ModalShell, useModalState, type ModalState } from "./Modal";
 
-interface UploadDeckButtonProps {
+interface CreateDeckButtonProps {
   onCreated?: () => void;
 }
 
-export default function UploadDeckButton({
+export default function CreateDeckButton({
   onCreated,
-}: UploadDeckButtonProps = {}) {
+}: CreateDeckButtonProps = {}) {
   const modalState = useModalState();
   return (
     <>
       <Button
-        text="Upload Deck"
+        text="Create Deck"
         width="fit"
         color="accent"
         textColor="white"
         onClick={modalState.open}
-        icon={UploadIcon}
+        icon={PlusIcon}
+        iconSize="w-5 h-5"
         iconPosition="right"
         iconOnlyOnMobile
       />
@@ -59,8 +60,7 @@ function Modal({ modalState, onCreated }: ModalProps) {
 
 type Page =
   | { name: "upload" }
-  | { name: "confirm"; file: File; fileText: string }
-  | { name: "manual" };
+  | { name: "confirm"; file: File; fileText: string };
 
 interface ModalContentProps {
   onClose(): void;
@@ -68,6 +68,36 @@ interface ModalContentProps {
 }
 
 function ModalContent({ onClose, onCreated }: ModalContentProps) {
+  const modalNavState = useModalNavState();
+  switch (modalNavState.currentTab) {
+    case "Manual":
+      return (
+        <ManualTab
+          modalNavState={modalNavState}
+          onSuccess={() => {
+            onCreated?.();
+            onClose();
+          }}
+        />
+      );
+    case "Upload":
+      return (
+        <UploadTab
+          modalNavState={modalNavState}
+          onClose={onClose}
+          onCreated={onCreated}
+        />
+      );
+  }
+}
+
+interface UploadTabProps {
+  modalNavState: ModalNavState;
+  onClose(): void;
+  onCreated?: () => void;
+}
+
+function UploadTab({ modalNavState, onClose, onCreated }: UploadTabProps) {
   const [page, setPage] = useState<Page>({ name: "upload" });
   function readFile(file: File) {
     const reader = new FileReader();
@@ -83,7 +113,7 @@ function ModalContent({ onClose, onCreated }: ModalContentProps) {
       return (
         <UploadPage
           onChooseFile={readFile}
-          onManualCreate={() => setPage({ name: "manual" })}
+          modalNavState={modalNavState}
         />
       );
     case "confirm":
@@ -97,38 +127,30 @@ function ModalContent({ onClose, onCreated }: ModalContentProps) {
           }}
         />
       );
-    case "manual":
-      return (
-        <ManualPage
-          onSuccess={() => {
-            onCreated?.();
-            onClose();
-          }}
-        />
-      );
   }
 }
 
 interface UploadPageProps {
+  modalNavState: ModalNavState;
   onChooseFile(file: File): void;
-  onManualCreate(): void;
 }
 
-function UploadPage({ onChooseFile, onManualCreate }: UploadPageProps) {
+function UploadPage({ modalNavState, onChooseFile }: UploadPageProps) {
   return (
     <>
       <UploadHeader />
-      <div className="p-8">
+      <ModalNav state={modalNavState} />
+      <div className="px-8 mt-5">
         <DropZone id="file-upload" onChooseFile={onChooseFile} />
       </div>
-      <div className="flex flex-row justify-center gap-x-4 mb-15">
+      <div className="flex flex-row justify-center gap-x-2 mb-10 mt-8">
         <div className="text-center text-primary-light-grey">
           Don't have a guide to upload?
         </div>
         <button
           type="button"
           className="text-accent font-semibold cursor-pointer"
-          onClick={onManualCreate}
+          onClick={() => modalNavState.setCurrentTab("Manual")}
         >
           Manually create deck
         </button>
@@ -351,11 +373,12 @@ function CardPreview({ card }: CardPreviewProps) {
   );
 }
 
-interface ManualPageProps {
+interface ManualTabProps {
+  modalNavState: ModalNavState;
   onSuccess(): void;
 }
 
-function ManualPage({ onSuccess }: ManualPageProps) {
+function ManualTab({ modalNavState, onSuccess }: ManualTabProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -430,7 +453,8 @@ function ManualPage({ onSuccess }: ManualPageProps) {
   return (
     <div className="relative w-200 max-w-full">
       <ManualHeader />
-      <div className="px-8 pt-4 pb-8 font-inter max-h-[75vh] overflow-y-auto">
+      <ModalNav state={modalNavState} />
+      <div className="px-8 pt-8 pb-8 font-inter max-h-[75vh] overflow-y-auto">
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>
           <div className="flex gap-3">
             <div className="flex flex-col">
@@ -580,3 +604,49 @@ function UploadHeaderMain() {
   );
 }
 
+const tabs = ["Manual", "Upload"] as const;
+type Tab = typeof tabs[number];
+
+interface ModalNavProps {
+  state: ModalNavState;
+}
+
+interface ModalNavState {
+  currentTab: Tab;
+  setCurrentTab(tab: Tab): void;
+}
+
+function ModalNav({ state: { currentTab, setCurrentTab} }: ModalNavProps) {
+  return (
+    <div className="flex font-semibold justify-center items-center gap-x-6 mt-4 text-sm font-inter">
+      {tabs.map(tab => {
+        if (tab === currentTab) {
+          return (
+            <button className="flex flex-col items-center cursor-pointer" key={tab}>
+              <div className="text-gray-400">{tab}</div>
+              <div className="h-0.5 w-[calc(100%-0.25rem)] bg-accent mt-0.5"></div>
+            </button>
+          );
+        } else {
+          function onClick() {
+            setCurrentTab(tab);
+          }
+          return (
+            <button className="flex flex-col items-center cursor-pointer" key={tab} onClick={onClick}>
+              <div className="text-gray-400">{tab}</div>
+              <div className="h-0.5 w-[calc(100%-0.25rem)] bg-accent mt-0.5 opacity-0"></div>
+            </button>
+          );
+        }
+      })}
+    </div>
+  );
+}
+
+function useModalNavState(): ModalNavState {
+  const [currentTab, setCurrentTab] = useState<Tab>(tabs[0]);
+  return {
+    currentTab,
+    setCurrentTab,
+  };
+}
