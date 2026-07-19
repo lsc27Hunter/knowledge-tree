@@ -24,6 +24,7 @@ export interface Deck {
   nextReviewDate: string | null;
   totalCards: number;
   lastStudiedAt: string;
+  activeStudySession: boolean;
 }
 
 export function DeckCard({ deckData }: DeckCardProps) {
@@ -97,7 +98,7 @@ export function DeckCard({ deckData }: DeckCardProps) {
       <div className="mx-auto flex w-9/10 items-center justify-center p-2 sm:w-9/10 font-medium">
         {timeUntilNextReview === null ?
           <Button
-            text="Study"
+            text={deckData.activeStudySession ? "Continue" : "Study"}
             width="full"
             color="accent"
             textColor="white"
@@ -117,10 +118,10 @@ export function DeckCard({ deckData }: DeckCardProps) {
 
 function formatTimeUntilNextReview(nextReviewDate: string | null) {
   if (nextReviewDate === null) return null;
-  const next = (new Date(nextReviewDate)).valueOf();
+  const next = (new Date(nextReviewDate + "Z")).getTime();
   if (Number.isNaN(next)) return null;
-  const seconds = Math.ceil((next - Date.now().valueOf()) / 1000);
-  if (seconds <= 0) return null;
+  const seconds = Math.ceil((next - Date.now()) / 1000);
+  if (seconds <= 1) return null;
   if (seconds < 60) return formatTime(seconds, "second");
   const minutes = Math.ceil(seconds / 60);
   if (minutes < 60) return formatTime(minutes, "minute");

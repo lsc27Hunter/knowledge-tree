@@ -21,6 +21,7 @@ class Deck(Base):
   due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
+  study_session: Mapped[Optional["StudySession"]] = relationship(init=False)
 
 class Card(Base):
   __tablename__ = "card"
@@ -76,6 +77,7 @@ class DeckListResponse(APISchema):
   next_review_date: datetime | None
   total_cards: int
   last_studied_at: datetime | None
+  active_study_session: bool
 
 class CardCreate(APISchema):
   question: str

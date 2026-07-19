@@ -22,6 +22,7 @@ function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
     nextReviewDate: deck.nextReviewDate,
     totalCards: deck.totalCards,
     lastStudiedAt: deck.lastStudiedAt ?? new Date(0).toISOString(),
+    activeStudySession: deck.activeStudySession,
   };
 }
 

@@ -6,7 +6,7 @@ from typing import Annotated, Any, cast
 from fastapi import FastAPI, Form, HTTPException, Path, UploadFile
 from fastapi.routing import APIRoute
 from sqlalchemy import CursorResult, delete, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 from auth import CurrentUserId
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeckGetResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUpdate, DeckUpdateResponse, DeckUploadResponse
@@ -45,10 +45,15 @@ async def get_me(user_id: CurrentUserId):
 
 @app.get("/api/decks", response_model=list[DeckListResponse])
 async def get_decks(session: SessionDep, user_id: CurrentUserId):
-  decks = (await session.execute(select(Deck).where(Deck.user_id == user_id))).scalars().all()
+  decks = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards), joinedload(Deck.study_session))
+    .where(Deck.user_id == user_id)
+  )).scalars().all()
   responses: list[DeckListResponse] = []
   for deck in decks:
-    cards = (await session.execute(select(Card).where(Card.deck_id == deck.id))).scalars().all()
+    cards = deck.cards
+    study_session = deck.study_session
     now = datetime.utcnow()
     if len(cards) == 0:
       next_review_date = None
@@ -65,6 +70,7 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
         cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
         next_review_date=next_review_date,
         total_cards=len(cards),
+        active_study_session=study_session is not None,
       )
     )
   return responses
@@ -113,7 +119,6 @@ async def update_deck(
   )).scalar_one_or_none()
   if not db_deck or db_deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
-  print("CLAR")
   db_deck.name = deck.name
   db_deck.description = deck.description
   db_deck.due_date = deck.due_date
@@ -126,7 +131,6 @@ async def update_deck(
     )
     if card.id is not None:
       new_card.id = card.id
-      print("woot")
     new_cards.append(new_card)
   db_deck.cards = new_cards
     
