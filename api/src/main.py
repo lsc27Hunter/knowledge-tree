@@ -50,6 +50,10 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
   for deck in decks:
     cards = (await session.execute(select(Card).where(Card.deck_id == deck.id))).scalars().all()
     now = datetime.utcnow()
+    if len(cards) == 0:
+      next_review_date = None
+    else:
+      next_review_date = min([c.next_review_date for c in cards])
     responses.append(
       DeckListResponse(
         id=deck.id,
@@ -59,6 +63,7 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
         last_studied_at=deck.last_studied_at,
         mastery=int(round(calculate_deck_mastery(cards))),
         cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+        next_review_date=next_review_date,
         total_cards=len(cards),
       )
     )

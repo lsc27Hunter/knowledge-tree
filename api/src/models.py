@@ -73,6 +73,7 @@ class DeckListResponse(APISchema):
   due_date: datetime | None
   mastery: int
   cards_due_today: int
+  next_review_date: datetime | None
   total_cards: int
   last_studied_at: datetime | None
 
