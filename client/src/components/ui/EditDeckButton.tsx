@@ -10,6 +10,7 @@ import {
   type CardDeckUpdate,
 } from "../../api";
 import { ModalHeaderMain, ModalHeaderShell, ModalShell, useModalState, type ModalState } from "./Modal";
+import Papa from "papaparse";
 
 interface EditDeckButtonProps {
   deckId: number;
@@ -102,6 +103,18 @@ function Form({ deckId, onSuccess }: FormProps) {
 
   function blankCard() {
     return { id: null, question: "", answer: "" };
+  }
+
+  function exportCsv() {
+    const text = Papa.unparse(cards.map(card => [card.question, card.answer]));
+    const blob = new Blob([text], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}.csv`
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -254,16 +267,26 @@ function Form({ deckId, onSuccess }: FormProps) {
           {errorMessage && (
             <div className="text-danger-red text-sm mt-1">{errorMessage}</div>
           )}
-          
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="cursor-pointer bg-accent px-4 py-2 rounded-lg self-end mt-2 disabled:opacity-50"
-          >
-            {isSubmitting
-              ? "Saving..."
-              : `Save Changes (${cards.length} card${cards.length !== 1 ? "s" : ""})`}
-          </button>
+
+ 
+          <div className="flex justify-end gap-x-4">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="cursor-pointer bg-primary-light-grey px-4 py-2 rounded-lg mt-2"
+            >
+              Export CSV
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="cursor-pointer bg-accent px-4 py-2 rounded-lg mt-2 disabled:opacity-50"
+            >
+              {isSubmitting
+                ? "Saving..."
+                : `Save Changes (${cards.length} card${cards.length !== 1 ? "s" : ""})`}
+            </button>
+          </div>
         </form>
       </div>
     </div>
