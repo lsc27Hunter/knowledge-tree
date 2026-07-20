@@ -301,6 +301,43 @@ async def test_delete_card(session: AsyncSession, client: AsyncClient):
   assert data["success"] == True
   assert card_in_db is None
 
+async def test_study(session: AsyncSession, client: AsyncClient):
+  deck = Deck(
+    user_id=user_id,
+    name="test name",
+    description="test description",
+    last_studied_at=None,
+    due_date=datetime.now()
+  )
+  session.add(deck)
+  await session.commit()
+
+  card = Card(
+    deck_id=deck.id,
+    question="test question",
+    answer="test answer",
+  )
+  session.add(card)
+  await session.commit()
+
+  response = await client.post(
+    f"/api/decks/{deck.id}/study",
+  )
+
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["deckId"] == deck.id
+  assert len(data["cards"]) == 1
+  assert data["cards"][0]["question"] == card.question
+  assert data["cards"][0]["answer"] == card.answer
+  assert data["cards"][0]["rating"] is None
+  assert data["index"] == 0
+  assert data["page"] == "cards"
+  assert data["mastery"] == 0
+  assert data["oldMastery"] == 0
+  assert data["cardsLeft"] == 1
+
 # Fixtures
 
 # https://anyio.readthedocs.io/en/stable/testing.html#using-async-fixtures-with-higher-scopes
