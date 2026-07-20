@@ -20,7 +20,7 @@ else:
   engine = create_async_engine(db_url, echo=True, connect_args=connect_args)
 
 async def get_session():
-  async with AsyncSession(engine) as session:
+  async with AsyncSession(engine, expire_on_commit=False) as session:
     yield session
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
