@@ -174,6 +174,7 @@ class CardReviewResponse(APISchema):
   interval: int
   next_review_date: datetime
   mastery: float
+  cards_left: bool
 
 class StudySessionResponse(APISchema):
   deck_id: int
@@ -182,6 +183,7 @@ class StudySessionResponse(APISchema):
   page: Literal["cards", "results"]
   mastery: float
   old_mastery: float
+  cards_left: bool
 
 class StudySessionCardResponse(APISchema):
   id: int

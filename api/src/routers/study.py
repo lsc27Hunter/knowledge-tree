@@ -6,7 +6,7 @@ from typing import Annotated, Any, Sequence, cast
 
 from fastapi import APIRouter, HTTPException, Path
 from sqlalchemy import CursorResult, delete, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from auth import CurrentUserId
 from db import SessionDep
@@ -41,6 +41,7 @@ async def study(
     await session.execute(select(Card).where(Card.deck_id == deck_id))
   ).scalars().all()
   mastery=calculate_deck_mastery(cards)
+  cards_left = any_cards_left(cards)
 
   async def get_existing_study_session():
     existing_study_session = (await session.execute(
@@ -69,10 +70,15 @@ async def study(
       page=page,
       mastery=mastery,
       old_mastery=existing_study_session.old_mastery,
+      cards_left=cards_left,
     )
   
   async def create_new_study_session():
-    cards_due = list((await session.execute(select(Card).where(Card.deck_id == deck_id, Card.next_review_date <= datetime.utcnow()).limit(20))).scalars().all())
+    cards_due = list((await session.execute(
+      select(Card)
+      .where(Card.deck_id == deck_id, Card.next_review_date <= datetime.utcnow())
+      .limit(20)
+    )).scalars().all())
     if len(cards_due) == 0:
       return StudySessionResponse(
         deck_id=deck_id,
@@ -81,6 +87,7 @@ async def study(
         page="cards",
         mastery=mastery,
         old_mastery=mastery,
+        cards_left=cards_left,
       )
     shuffle(cards_due)
     study_session = StudySession(
@@ -113,6 +120,7 @@ async def study(
       page="cards",
       mastery=mastery,
       old_mastery=study_session.old_mastery,
+      cards_left=cards_left,
     )
   
   existing = await get_existing_study_session()
@@ -142,7 +150,7 @@ async def review_card(
   
   deck = (await session.execute(
     select(Deck)
-    .options(joinedload(Deck.cards))
+    .options(selectinload(Deck.cards))
     .where(Deck.id == card.deck_id)
   )).unique().scalar_one_or_none()
   if not deck or deck.user_id != user_id:
@@ -157,8 +165,9 @@ async def review_card(
     raise HTTPException(status_code=404, detail="Card not found")
   
   if study_session_card.rating is not None:
-    mastery = calculate_deck_mastery(deck.cards)
     # Already rated.
+    mastery = calculate_deck_mastery(deck.cards)
+    cards_left = any_cards_left(deck.cards)
     return CardReviewResponse(
       id=card.id,
       repetition_count=card.repetition_count,
@@ -166,6 +175,7 @@ async def review_card(
       interval=card.interval,
       next_review_date=card.next_review_date,
       mastery=mastery,
+      cards_left=cards_left,
     )
 
   try:
@@ -191,6 +201,7 @@ async def review_card(
   await session.flush()
 
   mastery = calculate_deck_mastery(deck.cards)
+  cards_left = any_cards_left(deck.cards)
 
   await session.commit()
   await session.refresh(card)
@@ -202,6 +213,7 @@ async def review_card(
     interval=card.interval,
     next_review_date=card.next_review_date,
     mastery=mastery,
+    cards_left=cards_left,
   )
 
 @router.delete("/api/decks/{deckId}/complete", response_model=CompleteStudySessionResponse)
@@ -210,14 +222,15 @@ async def complete_study_session(
   session: SessionDep,
   user_id: CurrentUserId,
 ):
-  deck = await session.get(Deck, deck_id)
+  deck = (await session.execute(
+    select(Deck)
+    .options(joinedload(Deck.study_session))
+    .where(Deck.id == deck_id)
+  )).scalar_one_or_none()
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
   
-  study_session = (await session.execute(
-    select(StudySession)
-    .where(StudySession.deck_id == deck_id)
-  )).scalar_one_or_none()
+  study_session = deck.study_session
   if study_session is None:
     raise HTTPException(status_code=404, detail="Study session not found")
   result = await session.execute(delete(StudySession).where(StudySession.deck_id == deck_id))
@@ -253,3 +266,9 @@ def get_study_session_index_and_page(study_session_cards: Sequence[StudySessionC
       else:
         page = "results"
   return (index, page)
+
+def any_cards_left(cards: Sequence[Card]):
+  for card in cards:
+    if card.next_review_date <= datetime.utcnow():
+      return True
+  return False
