@@ -21,6 +21,7 @@ class Deck(Base):
   due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
+  study_session: Mapped[Optional["StudySession"]] = relationship(init=False)
 
 class Card(Base):
   __tablename__ = "card"
@@ -73,8 +74,10 @@ class DeckListResponse(APISchema):
   due_date: datetime | None
   mastery: int
   cards_due_today: int
+  next_review_date: datetime | None
   total_cards: int
   last_studied_at: datetime | None
+  active_study_session: bool
 
 class CardCreate(APISchema):
   question: str
@@ -93,13 +96,38 @@ class DeckCreateResponse(APISchema):
   name: str
   description: str
 
+class DeckUpdate(APISchema):
+  name: str
+  description: str
+  due_date: datetime | None
+  cards: list["CardDeckUpdate"] = Field(min_length=1)
+
+class CardDeckUpdate(APISchema):
+  id: int | None
+  question: str
+  answer: str
+
+class DeckUpdateResponse(APISchema):
+  id: int
+  name: str
+  description: str
+  due_date: datetime | None
+
 class DeckGetResponse(APISchema):
   id: int
   name: str
+  description: str
+  due_date: datetime | None
+  cards: list["CardDeckGetResponse"]
   mastery: int
   cards_due_today: int
   total_cards: int
   retention_rate: int
+
+class CardDeckGetResponse(APISchema):
+  id: int
+  question: str
+  answer: str
 
 class DeckDeleteResponse(APISchema):
   success: bool

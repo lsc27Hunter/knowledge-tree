@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Logo } from "./Logo";
 import { Link } from "react-router-dom";
 import { Button } from "./Button";
-import UploadDeckButton from "./UploadDeckButton";
+import CreateDeckButton from "./CreateDeckButton";
 
 interface NavbarProps {
   version: "Landing" | "Dashboard" | "Blank";
@@ -44,7 +44,7 @@ export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
         </div>
       ) : version === "Dashboard" ? (
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap sm:gap-4">
-          <UploadDeckButton onCreated={onDeckCreated} />
+          <CreateDeckButton onCreated={onDeckCreated} />
           {userButton}
         </div>
       ) : null}

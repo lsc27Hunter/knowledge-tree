@@ -5,10 +5,11 @@ from typing import Annotated, Any, cast
 
 from fastapi import FastAPI, Form, HTTPException, Path, UploadFile
 from fastapi.routing import APIRoute
-from sqlalchemy import CursorResult, delete, func, select
+from sqlalchemy import CursorResult, delete, select
+from sqlalchemy.orm import joinedload, selectinload
 from auth import CurrentUserId
 from db import SessionDep
-from models import Card, CardCreate, CardCreateResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUploadResponse
+from models import Card, CardCreate, CardCreateResponse, CardDeckGetResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUpdate, DeckUpdateResponse, DeckUploadResponse
 from routers.study import router as study_router
 from utils.mastery import calculate_deck_mastery, card_mastery
 
@@ -44,11 +45,20 @@ async def get_me(user_id: CurrentUserId):
 
 @app.get("/api/decks", response_model=list[DeckListResponse])
 async def get_decks(session: SessionDep, user_id: CurrentUserId):
-  decks = (await session.execute(select(Deck).where(Deck.user_id == user_id))).scalars().all()
+  decks = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards), joinedload(Deck.study_session))
+    .where(Deck.user_id == user_id)
+  )).scalars().all()
   responses: list[DeckListResponse] = []
   for deck in decks:
-    cards = (await session.execute(select(Card).where(Card.deck_id == deck.id))).scalars().all()
+    cards = deck.cards
+    study_session = deck.study_session
     now = datetime.utcnow()
+    if len(cards) == 0:
+      next_review_date = None
+    else:
+      next_review_date = min([c.next_review_date for c in cards])
     responses.append(
       DeckListResponse(
         id=deck.id,
@@ -58,7 +68,9 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
         last_studied_at=deck.last_studied_at,
         mastery=int(round(calculate_deck_mastery(cards))),
         cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+        next_review_date=next_review_date,
         total_cards=len(cards),
+        active_study_session=study_session is not None,
       )
     )
   return responses
@@ -93,6 +105,44 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
     description=db_deck.description,
   )
 
+@app.patch("/api/decks/{deckId}", response_model=DeckUpdateResponse)
+async def update_deck(
+  deck_id: Annotated[int, Path(alias="deckId")],
+  deck: DeckUpdate,
+  session: SessionDep,
+  user_id: CurrentUserId
+):
+  db_deck = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards))
+    .where(Deck.id == deck_id)
+  )).scalar_one_or_none()
+  if not db_deck or db_deck.user_id != user_id:
+    raise HTTPException(status_code=404, detail="Deck not found")
+  db_deck.name = deck.name
+  db_deck.description = deck.description
+  db_deck.due_date = deck.due_date
+  new_cards: list[Card] = []
+  for card in deck.cards:
+    new_card = Card(
+      deck_id=deck_id,
+      question=card.question,
+      answer=card.answer,
+    )
+    if card.id is not None:
+      new_card.id = card.id
+    new_cards.append(new_card)
+  db_deck.cards = new_cards
+    
+  await session.commit()
+  await session.refresh(db_deck)
+  return DeckUpdateResponse(
+    id=db_deck.id,
+    name=db_deck.name,
+    description=db_deck.description,
+    due_date=db_deck.due_date,
+  )
+
 @app.get("/api/decks/{deckId}", response_model=DeckGetResponse)
 async def get_deck(
   deck_id: Annotated[int, Path(alias="deckId")],
@@ -108,6 +158,15 @@ async def get_deck(
   return DeckGetResponse(
     id=deck.id,
     name=deck.name,
+    description=deck.description,
+    due_date=deck.due_date,
+    cards=[
+      CardDeckGetResponse(
+        id=card.id,
+        question=card.question,
+        answer=card.answer,
+      ) for card in cards
+    ],
     mastery=int(round(mastery)),
     cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
     total_cards=len(cards),
