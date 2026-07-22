@@ -25,13 +25,16 @@ export interface Deck {
   totalCards: number;
   lastStudiedAt: string;
   activeStudySession: boolean;
+  discoverable: boolean;
 }
 
 export function DeckCard({ deckData }: DeckCardProps) {
   const deckId = deckData.id;
   const dueDateOnly = deckData.dueDate?.slice(0, 10);
   const todayIsoDate = new Date().toISOString().slice(0, 10);
-  const timeUntilNextReview = formatTimeUntilNextReview(deckData.nextReviewDate);
+  const timeUntilNextReview = formatTimeUntilNextReview(
+    deckData.nextReviewDate,
+  );
 
   return (
     <div className="min-h-44 w-full rounded-2xl bg-primary-grey p-2 text-white sm:min-h-56 sm:p-4">
@@ -96,7 +99,7 @@ export function DeckCard({ deckData }: DeckCardProps) {
         {deckData.totalCards} Cards
       </div>
       <div className="mx-auto flex w-9/10 items-center justify-center p-2 sm:w-9/10 font-medium">
-        {timeUntilNextReview === null ?
+        {timeUntilNextReview === null ? (
           <Button
             text={deckData.activeStudySession ? "Continue" : "Study"}
             width="full"
@@ -105,12 +108,13 @@ export function DeckCard({ deckData }: DeckCardProps) {
             icon={ArrowRight}
             iconPosition="right"
             to={`/study/${deckId}`}
-          /> :
+          />
+        ) : (
           <div className="bg-success-green text-white w-full py-2 px-4 rounded flex items-center justify-center gap-x-2">
             <div>{timeUntilNextReview}</div>
             <img className="w-4 h-4" src={Clock} alt="Clock" />
           </div>
-        }
+        )}
       </div>
     </div>
   );
@@ -118,7 +122,7 @@ export function DeckCard({ deckData }: DeckCardProps) {
 
 function formatTimeUntilNextReview(nextReviewDate: string | null) {
   if (nextReviewDate === null) return null;
-  const next = (new Date(nextReviewDate + "Z")).getTime();
+  const next = new Date(nextReviewDate + "Z").getTime();
   if (Number.isNaN(next)) return null;
   const seconds = Math.ceil((next - Date.now()) / 1000);
   if (seconds <= 1) return null;

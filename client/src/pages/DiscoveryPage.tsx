@@ -2,7 +2,7 @@ import { UserButton, useUser } from "@clerk/react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getDecks, type DeckListResponse } from "../api";
+import { getDiscoverableDecks, type DeckListResponse } from "../api";
 
 import { Navbar } from "../components/ui/Navbar";
 import {
@@ -10,10 +10,6 @@ import {
   type Deck as DashboardDeck,
 } from "../components/ui/DeckCard";
 import { Spinner } from "../components/ui/Spinner";
-
-import Checkmark from "../assets/checkmark-circle.svg";
-import StarBadge from "../assets/star-badge.svg";
-import Danger from "../assets/danger.svg";
 
 function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
   return {
@@ -30,14 +26,14 @@ function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
   };
 }
 
-export default function DashboardPage() {
-  const { isLoaded, user } = useUser();
+export default function DiscoveryPage() {
+  const { isLoaded } = useUser();
   const [sortingOption, setSortingOption] = useState("Next Review");
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [decks, setDecks] = useState<DashboardDeck[]>([]);
   const [decksError, setDecksError] = useState<string | null>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
-  console.log(decks);
+
   const sortingOptions = ["Next Review", "Due Date", "Mastery", "Last Studied"];
 
   const loadDecks = useCallback(async () => {
@@ -47,7 +43,7 @@ export default function DashboardPage() {
 
     try {
       setDecksError(null);
-      const result = await getDecks();
+      const result = await getDiscoverableDecks();
 
       if (result.error) {
         throw result.error;
@@ -94,15 +90,6 @@ export default function DashboardPage() {
     );
   }
 
-  const userData = {
-    userId: user?.id,
-    userName: user?.username ?? user?.fullName ?? user?.firstName ?? "Learner",
-    userEmail: user?.primaryEmailAddress?.emailAddress ?? "",
-    userFirstName:
-      user?.username?.split(" ")[0] ?? user?.firstName ?? "Learner",
-    currentStreak: 7, // to do: figure out how to calculate this from backend data
-  };
-
   const sortedDecks = [...decks].sort((a, b) => {
     if (sortingOption === "Next Review") {
       if (!a.nextReviewDate) return 1;
@@ -126,32 +113,6 @@ export default function DashboardPage() {
     return 0;
   });
 
-  const deckCount = sortedDecks.length;
-
-  const cardCount = sortedDecks.reduce((acc, deck) => acc + deck.totalCards, 0);
-
-  const averageMastery =
-    deckCount === 0
-      ? 0
-      : sortedDecks.reduce((acc, deck) => acc + deck.mastery, 0) / deckCount;
-
-  const decksDueThisWeek = sortedDecks.filter((deck) => {
-    if (!deck.dueDate) return false;
-
-    const dueDateOnly = deck.dueDate.slice(0, 10);
-    const dueDate = new Date(`${dueDateOnly}T00:00:00`);
-
-    if (Number.isNaN(dueDate.getTime())) return false;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const oneWeekFromToday = new Date(today);
-    oneWeekFromToday.setDate(today.getDate() + 7);
-
-    return dueDate >= today && dueDate <= oneWeekFromToday;
-  });
-
   return (
     <div className="mb-4">
       <Navbar
@@ -162,63 +123,12 @@ export default function DashboardPage() {
         }}
       />
 
-      <h2 className="font-inter text-white text-title-medium font-medium mx-15 mt-15 sm:text-regular">
-        {userData.userFirstName
-          ? `${userData.userFirstName}'s decks`
-          : "My decks"}
-      </h2>
-
-      <div className="font-inter text-primary-light-grey text-regular font-regular mx-15 mt-2">
-        {deckCount} {deckCount === 1 ? "deck" : "decks"}{" "}
-        <span aria-hidden="true">&bull;</span> {cardCount}{" "}
-        {cardCount === 1 ? "card" : "cards"}
-      </div>
       {decksError ? (
         <div className="mx-15 mt-3 text-small text-danger-red">
           {decksError}
         </div>
       ) : null}
-      <div className="mt-10 ml-4 w-[calc(100%-2rem)] sm:ml-15 sm:w-7/10">
-        <div className="flex flex-col gap-6 rounded-2xl bg-primary-grey p-6 text-white font-jetbrains sm:flex-row sm:items-center sm:justify-between sm:p-9">
-          <div className="flex flex-row items-center">
-            <img src={Checkmark} alt="Checkmark" className="w-20 h-20 " />
-            <div className="flex flex-col">
-              <div className="text-title-large pl-2">
-                {Math.round(averageMastery * 100)}%
-              </div>
-              <div className="text-small text-primary-light-grey pl-2 ">
-                Average Mastery
-              </div>
-            </div>
-          </div>
 
-          <div className="flex flex-row items-center">
-            <img src={StarBadge} alt="Star Badge" className="w-20 h-20" />
-            <div className="flex flex-col">
-              <div className="text-title-large pl-2">
-                {userData.currentStreak}
-              </div>
-              <div className="text-small text-primary-light-grey pl-2 ">
-                Day streak
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-row items-center">
-            <img src={Danger} alt="Danger" className="w-20 h-20" />
-            <div className="flex flex-col">
-              <div className="text-title-large pl-2 pr-50">
-                {decksDueThisWeek.length}
-              </div>
-              <div className="text-small text-primary-light-grey pl-2">
-                {decksDueThisWeek.length === 1
-                  ? "Deck due this week"
-                  : "Decks due this week"}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
       <div className="mx-4 mt-2 flex justify-center sm:mx-15 sm:justify-end">
         <div className="relative" ref={sortMenuRef}>
           <button

@@ -44,12 +44,19 @@ async def get_me(user_id: CurrentUserId):
   return {"userId": user_id}
 
 @app.get("/api/decks", response_model=list[DeckListResponse])
-async def get_decks(session: SessionDep, user_id: CurrentUserId):
-  decks = (await session.execute(
+async def get_decks(
+  session: SessionDep,
+  user_id: CurrentUserId,
+  discoverable: bool | None = None,
+):
+  query = (
     select(Deck)
     .options(selectinload(Deck.cards), joinedload(Deck.study_session))
     .where(Deck.user_id == user_id)
-  )).scalars().all()
+  )
+  if discoverable is not None:
+    query = query.where(Deck.discoverable == discoverable)
+  decks = (await session.execute(query)).scalars().all()
   responses: list[DeckListResponse] = []
   for deck in decks:
     cards = deck.cards
@@ -64,6 +71,7 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
         id=deck.id,
         name=deck.name,
         description=deck.description,
+        discoverable=deck.discoverable,
         due_date=deck.due_date,
         last_studied_at=deck.last_studied_at,
         mastery=int(round(calculate_deck_mastery(cards))),
@@ -75,12 +83,45 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
     )
   return responses
 
+@app.get("/api/discovery/decks", response_model=list[DeckListResponse])
+async def get_discoverable_decks(session: SessionDep):
+  decks = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards))
+    .where(Deck.discoverable == True)
+  )).scalars().all()
+  responses: list[DeckListResponse] = []
+  for deck in decks:
+    cards = deck.cards
+    now = datetime.utcnow()
+    if len(cards) == 0:
+      next_review_date = None
+    else:
+      next_review_date = min([c.next_review_date for c in cards])
+    responses.append(
+      DeckListResponse(
+        id=deck.id,
+        name=deck.name,
+        description=deck.description,
+        discoverable=deck.discoverable,
+        due_date=deck.due_date,
+        last_studied_at=deck.last_studied_at,
+        mastery=int(round(calculate_deck_mastery(cards))),
+        cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+        next_review_date=next_review_date,
+        total_cards=len(cards),
+        active_study_session=False,
+      )
+    )
+  return responses
+
 @app.post("/api/decks", response_model=DeckCreateResponse)
 async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUserId):
   db_deck = Deck(
     user_id=user_id,
     name=deck.name,
     description=deck.description,
+    discoverable=deck.discoverable,
     due_date=deck.due_date,
     last_studied_at=deck.last_studied_at,
   )
@@ -103,6 +144,7 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
     id=db_deck.id,
     name=db_deck.name,
     description=db_deck.description,
+    discoverable=db_deck.discoverable,
   )
 
 @app.patch("/api/decks/{deckId}", response_model=DeckUpdateResponse)
@@ -121,6 +163,7 @@ async def update_deck(
     raise HTTPException(status_code=404, detail="Deck not found")
   db_deck.name = deck.name
   db_deck.description = deck.description
+  db_deck.discoverable = deck.discoverable
   db_deck.due_date = deck.due_date
   new_cards: list[Card] = []
   for card in deck.cards:
@@ -140,6 +183,7 @@ async def update_deck(
     id=db_deck.id,
     name=db_deck.name,
     description=db_deck.description,
+    discoverable=db_deck.discoverable,
     due_date=db_deck.due_date,
   )
 
@@ -159,6 +203,7 @@ async def get_deck(
     id=deck.id,
     name=deck.name,
     description=deck.description,
+    discoverable=deck.discoverable,
     due_date=deck.due_date,
     cards=[
       CardDeckGetResponse(
@@ -194,6 +239,7 @@ async def upload_deck(
   user_id: CurrentUserId,
   due_date: Annotated[str | None, Form(alias="dueDate")] = None,
   description: Annotated[str, Form()] = "",
+  discoverable: Annotated[bool, Form()] = False,
 ):
   parsed_due_date = (
     datetime.fromisoformat(due_date)
@@ -207,6 +253,7 @@ async def upload_deck(
     description=description,
     last_studied_at=None,
     due_date=parsed_due_date,
+    discoverable=discoverable,
   )
 
   session.add(db_deck)
