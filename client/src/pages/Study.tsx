@@ -6,7 +6,7 @@ import GreenCheckSquare from "../assets/green-check-square.svg";
 import YellowSquare from "../assets/yellow-square.svg";
 import RedXSquare from "../assets/red-x-square.svg";
 import { Link, useParams } from "react-router-dom";
-import { reviewCard, study, type StudySessionResponse, completeStudySession, getDeckMastery } from "../api";
+import { reviewCard, study, type StudySessionResponse, completeStudySession, getDeckMastery, type StudySessionCardResponse } from "../api";
 
 const StudyPage: React.FC = () => {
   return (
@@ -19,6 +19,7 @@ const StudyPage: React.FC = () => {
 
 type StudySectionPage = { name: "cards" } | { name: "results", mastery: number | null, oldMastery: number }
 type CardId = number;
+type Card = StudySessionCardResponse;
 type Rating = "red" | "yellow" | "green";
 type RateResult = "rated" | "unrated";
 
@@ -29,7 +30,8 @@ function StudySection() {
   const [startFrom, setStartFrom] = useState(0);
   const [page, setPage] = useState<StudySectionPage>({ name: "cards" });
   const [ratings, setRatings] = useState<Map<CardId, Rating>>(new Map());
-  const [cardsLeft, setCardsLeft] = useState(true);
+  const [mastery, setMastery] = useState<number | null>(null);
+  const [cardsLeft, setCardsLeft] = useState<number | null>(null);
 
   function beginStudy() {
     study({ path: { deckId }}).then(res => {
@@ -59,6 +61,7 @@ function StudySection() {
         }
         setRatings(fetchedRatings);
         setCardsLeft(fetchedStudySession.cardsLeft);
+        setMastery(fetchedStudySession.mastery);
       }
       setIsLoading(false);
     });
@@ -75,24 +78,36 @@ function StudySection() {
     return (<div>Error: deck not found.</div>);
   }
 
-  function gotoResults(oldMastery: number, newCardsLeft: boolean = cardsLeft ) {
-    setPage({ name: "results", mastery: null, oldMastery });
-    setCardsLeft(newCardsLeft);
+  function gotoResults(oldMastery: number, newCardsLeft: number | null = null ) {
+    setPage({ name: "results", mastery, oldMastery });
+    if (newCardsLeft !== null) {
+      setCardsLeft(newCardsLeft);
+    }
   }
-  function rate(id: CardId, rating: Rating): RateResult {
+  console.log("Mastery:", mastery);
+  function rate(card: Card, rating: Rating): RateResult {
     // TODO: Disable undo for now, implement later.
-    if (ratings.get(id) !== undefined) return "unrated";
+    if (ratings.get(card.id) !== undefined) return "unrated";
 
+    if (mastery === null || cardsLeft === null || studySession === null) return "unrated";
+
+    const masteryChange = getMasteryChange(card, rating);
     const newRatings = new Map(ratings);
-    const ratingNow = newRatings.get(id);
+    const ratingNow = newRatings.get(card.id);
     let rateResult: RateResult | undefined;
     if (ratingNow === rating) {
-      newRatings.delete(id);
+      newRatings.delete(card.id);
       rateResult = "unrated";
+      setMastery((mastery * studySession.totalCardsInDeck - masteryChange * 100) / studySession.totalCardsInDeck);
+      setCardsLeft(cardsLeft + 1);
     } else {
-      newRatings.set(id, rating);
+      newRatings.set(card.id, rating);
       rateResult = "rated";
+      setMastery((mastery * studySession.totalCardsInDeck + masteryChange * 100) / studySession.totalCardsInDeck);
+      setCardsLeft(cardsLeft - 1);
     }
+    console.log("Card:", card);
+    console.log("Mastery Change:", masteryChange);
     setRatings(newRatings);
     return rateResult;
   }
@@ -102,13 +117,15 @@ function StudySection() {
       setPage({ name: "cards" });
       setStartFrom(studySession.cards.length - 1);
     }
-    function updateResultsPage(mastery: number, newCardsLeft: boolean = cardsLeft) {
-      setPage({ name: "results", mastery, oldMastery: studySession.oldMastery });
-      setCardsLeft(newCardsLeft);
+    function updateResultsPage(mastery: number, newCardsLeft: number | null = null) {
+      // setPage({ name: "results", mastery, oldMastery: studySession.oldMastery });
+      if (newCardsLeft !== null) {
+        setCardsLeft(newCardsLeft);
+      }
     }
     switch (page.name) {
       case "cards": return (<CardsPage studySession={studySession} startFrom={startFrom} ratings={ratings} gotoResults={gotoResults} updateResultsPage={updateResultsPage} rate={rate} />);
-      case "results": return (<ResultsPage ratings={ratings} studySession={studySession} mastery={page.mastery} oldMastery={page.oldMastery} cardsLeft={cardsLeft} goBackToCards={goBackToCards} beginStudy={beginStudy} />);
+      case "results": return (<ResultsPage ratings={ratings} studySession={studySession} mastery={mastery} oldMastery={page.oldMastery} cardsLeft={cardsLeft} goBackToCards={goBackToCards} beginStudy={beginStudy} />);
     }
   }
 
@@ -125,9 +142,17 @@ interface CardsPageProps {
   studySession: StudySessionResponse,
   startFrom: number,
   ratings: Map<CardId, Rating>,
-  gotoResults(oldMastery: number, cardsLeft?: boolean): void,
-  updateResultsPage(mastery: number, cardsLeft?: boolean): void,
-  rate(id: CardId, rating: Rating): RateResult,
+  gotoResults(oldMastery: number, cardsLeft?: number): void,
+  updateResultsPage(mastery: number, cardsLeft?: number): void,
+  rate(card: Card, rating: Rating): RateResult,
+}
+
+function getMasteryChange(card: Card, rating: Rating) {
+  switch (rating) {
+    case "red": return card.masteryChangeOnRed;
+    case "yellow": return card.masteryChangeOnYellow;
+    case "green": return card.masteryChangeOnGreen;
+  }
 }
 
 function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResultsPage, rate: _rate }: CardsPageProps) {
@@ -180,7 +205,7 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResult
   function rate(rating: Rating) {
     if (cards.length === 0) return;
     const card = cards[index];
-    const rateResult = _rate(card.id, rating);
+    const rateResult = _rate(card, rating);
     if (rateResult === "rated") {
       const reviewCardPromise = reviewCard({
         path: {
@@ -191,7 +216,7 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResult
         },
       });
       if (!nextCard()) {
-        gotoResults(studySession.oldMastery, false);
+        gotoResults(studySession.oldMastery);
         reviewCardPromise.then(res => {
           if (res.data) {
             updateResultsPage(res.data.mastery, res.data.cardsLeft);
@@ -238,7 +263,7 @@ interface ResultsPageProps {
   studySession: StudySessionResponse;
   mastery: number | null;
   oldMastery: number;
-  cardsLeft: boolean;
+  cardsLeft: number | null;
   beginStudy(): void;
   goBackToCards(): void;
 }
@@ -269,8 +294,10 @@ function useMasteryAnim(oldMastery: number, newMastery: number) {
 }
 
 function ResultsPage({ ratings, studySession, mastery, oldMastery, cardsLeft, beginStudy, goBackToCards }: ResultsPageProps) {
+  console.log(cardsLeft);
   const masteryAnim = useMasteryAnim(oldMastery, mastery ?? oldMastery);
   const masteryAnimRounded = Math.round(masteryAnim);
+  console.log(masteryAnim, mastery);
   const cardCount = studySession.cards.length;
   useKeyDown("ArrowLeft", goBackToCards);
   function continueThisDeck() {
@@ -329,7 +356,7 @@ function ResultsPage({ ratings, studySession, mastery, oldMastery, cardsLeft, be
       <div className={`text-center font-jetbrains text-lg mt-3 ${accuracy === null ? "invisible" : ""}`}>
         <span className="text-right text-purple-500">Accuracy</span><span className="text-right text-white ml-3">{accuracy}%</span>
       </div>
-      {cardsLeft ?
+      {(cardsLeft === null || cardsLeft > 0) ?
         <button className="cursor-pointer bg-accent text-white font-bold w-52 text-center py-2 rounded mt-6 text-lg" onClick={continueThisDeck}>Continue this deck</button> :
         <div className="text-white text-lg font-bold mt-6">Deck complete!</div>
       }

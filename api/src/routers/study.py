@@ -2,10 +2,11 @@
 
 from datetime import datetime
 from random import shuffle
-from typing import Annotated, Any, Sequence, cast
+from typing import Annotated, Any, Literal, Sequence, cast
 
 from fastapi import APIRouter, HTTPException, Path
 from sqlalchemy import CursorResult, delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from auth import CurrentUserId
@@ -22,7 +23,7 @@ from models import (
   StudySessionCardResponse,
   StudySessionResponse,
 )
-from utils.mastery import calculate_deck_mastery
+from utils.mastery import calculate_deck_mastery, card_mastery
 from utils.sm2 import calculate_sm2, rating_to_quality
 
 router = APIRouter(tags=["study"])
@@ -33,109 +34,136 @@ async def study(
   session: SessionDep,
   user_id: CurrentUserId,
 ):
-  deck = await session.get(Deck, deck_id)
-  if not deck or deck.user_id != user_id:
-    raise HTTPException(status_code=404, detail="Deck not found")
-  
-  cards = (
-    await session.execute(select(Card).where(Card.deck_id == deck_id))
-  ).scalars().all()
-  mastery=calculate_deck_mastery(cards)
-  cards_left = any_cards_left(cards)
-
-  async def get_existing_study_session():
-    existing_study_session = (await session.execute(
-      select(StudySession)
-      .options(joinedload(StudySession.cards))
-      .where(StudySession.deck_id == deck_id)
-    )).unique().scalar_one_or_none()
-    if existing_study_session is None:
-      return None
-    study_session_cards = (await session.execute(
-      select(StudySessionCard).options(joinedload(StudySessionCard.card))
-      .where(StudySessionCard.study_session_id == existing_study_session.id)
-      .order_by(StudySessionCard.index.asc()))).scalars().all()
-    index, page = get_study_session_index_and_page(study_session_cards)
-    return StudySessionResponse(
-      deck_id=deck_id,
-      cards = [
-        StudySessionCardResponse(
-          id=study_card.card_id,
-          question=study_card.card.question,
-          answer=study_card.card.answer,
-          rating=study_card.rating,
-        ) for study_card in study_session_cards
-      ],
-      index=index,
-      page=page,
-      mastery=mastery,
-      old_mastery=existing_study_session.old_mastery,
-      cards_left=cards_left,
-    )
-  
-  async def create_new_study_session():
-    cards_due = list((await session.execute(
-      select(Card)
-      .where(Card.deck_id == deck_id, Card.next_review_date <= datetime.utcnow())
-      .limit(20)
-    )).scalars().all())
-    if len(cards_due) == 0:
-      return StudySessionResponse(
-        deck_id=deck_id,
-        cards=[],
-        index=0,
-        page="cards",
-        mastery=mastery,
-        old_mastery=mastery,
-        cards_left=cards_left,
-      )
-    shuffle(cards_due)
-    study_session = StudySession(
-      deck_id=deck_id,
-      old_mastery=mastery,
-    )
-    session.add(study_session)
-    await session.flush()
-    study_cards: list[StudySessionCardResponse] = []
-    for i, card in enumerate(cards_due):
-      study_card = StudySessionCard(
-        card_id=card.id,
-        index=i,
-        study_session_id=study_session.id,
-        rating=None,
-      )
-      session.add(study_card)
-      await session.flush()
-      study_cards.append(StudySessionCardResponse(
-        id=study_card.card_id,
-        question=card.question,
-        answer=card.answer,
-        rating=None,
-      ))
-    await session.commit()
-    return StudySessionResponse(
-      deck_id=deck_id,
-      cards=study_cards,
-      index=0,
-      page="cards",
-      mastery=mastery,
-      old_mastery=study_session.old_mastery,
-      cards_left=cards_left,
-    )
-  
-  existing = await get_existing_study_session()
+  existing = await get_existing_study_session(deck_id, user_id, session)
   if existing is None:
     try:
-      return await create_new_study_session()
+      return await create_new_study_session(deck_id, user_id, session)
     except Exception as e:
       # Race condition: a new study session was already created before we could create one,
       # causing an exception.
       await session.rollback()
-      existing = await get_existing_study_session()
+      existing = await get_existing_study_session(deck_id, user_id, session)
       if existing is None:
         raise e
       return existing
   return existing
+
+async def get_existing_study_session(deck_id: int, user_id: str, session: AsyncSession):
+  total_cards_in_deck, mastery, cards_left = await get_deck_progress(deck_id, user_id, session)
+  existing_study_session = (await session.execute(
+    select(StudySession)
+    .options(joinedload(StudySession.cards))
+    .where(StudySession.deck_id == deck_id)
+  )).unique().scalar_one_or_none()
+  if existing_study_session is None:
+    return None
+  study_session_cards = (await session.execute(
+    select(StudySessionCard).options(joinedload(StudySessionCard.card))
+    .where(StudySessionCard.study_session_id == existing_study_session.id)
+    .order_by(StudySessionCard.index.asc()))).scalars().all()
+  index, page = get_study_session_index_and_page(study_session_cards)
+  return StudySessionResponse(
+    deck_id=deck_id,
+    cards = [
+      StudySessionCardResponse(
+        id=study_card.card_id,
+        question=study_card.card.question,
+        answer=study_card.card.answer,
+        rating=study_card.rating,
+        mastery_change_on_red=get_mastery_change(study_card.card, "red"),
+        mastery_change_on_yellow=get_mastery_change(study_card.card, "yellow"),
+        mastery_change_on_green=get_mastery_change(study_card.card, "green"),
+      ) for study_card in study_session_cards
+    ],
+    index=index,
+    page=page,
+    total_cards_in_deck=total_cards_in_deck,
+    mastery=mastery,
+    old_mastery=existing_study_session.old_mastery,
+    cards_left=cards_left,
+  )
+
+async def create_new_study_session(deck_id: int, user_id: str, session: AsyncSession):
+  total_cards_in_deck, mastery, cards_left = await get_deck_progress(deck_id, user_id, session)
+  cards_due = list((await session.execute(
+    select(Card)
+    .where(Card.deck_id == deck_id, Card.next_review_date <= datetime.utcnow())
+    .limit(20)
+  )).scalars().all())
+  if len(cards_due) == 0:
+    return StudySessionResponse(
+      deck_id=deck_id,
+      cards=[],
+      index=0,
+      page="cards",
+      total_cards_in_deck=total_cards_in_deck,
+      mastery=mastery,
+      old_mastery=mastery,
+      cards_left=cards_left,
+    )
+  shuffle(cards_due)
+  study_session = StudySession(
+    deck_id=deck_id,
+    old_mastery=mastery,
+  )
+  session.add(study_session)
+  await session.flush()
+  study_cards: list[StudySessionCardResponse] = []
+  for i, card in enumerate(cards_due):
+    study_card = StudySessionCard(
+      card_id=card.id,
+      index=i,
+      study_session_id=study_session.id,
+      rating=None,
+    )
+    session.add(study_card)
+    await session.flush()
+    study_cards.append(StudySessionCardResponse(
+      id=study_card.card_id,
+      question=card.question,
+      answer=card.answer,
+      rating=None,
+      mastery_change_on_red=get_mastery_change(card, "red"),
+      mastery_change_on_yellow=get_mastery_change(card, "yellow"),
+      mastery_change_on_green=get_mastery_change(card, "green"),
+    ))
+  await session.commit()
+  return StudySessionResponse(
+    deck_id=deck_id,
+    cards=study_cards,
+    index=0,
+    page="cards",
+    total_cards_in_deck=total_cards_in_deck,
+    mastery=mastery,
+    old_mastery=study_session.old_mastery,
+    cards_left=cards_left,
+  )
+
+def get_mastery_change(card: Card, rating: Literal["red", "yellow", "green"]):
+  current_mastery = card_mastery(card.interval)
+  quality = rating_to_quality(rating)
+  projected_sm2 = calculate_sm2(
+    quality=quality,
+    repetitions=card.repetition_count,
+    easiness=card.easiness_factor,
+    interval=card.interval,
+  )
+  projected_mastery = card_mastery(projected_sm2.interval)
+  return projected_mastery - current_mastery
+
+async def get_deck_progress(deck_id: int, user_id: str, session: AsyncSession):
+  deck = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards))
+    .where(Deck.id == deck_id)
+  )).scalar_one_or_none()
+  if not deck or deck.user_id != user_id:
+    raise HTTPException(status_code=404, detail="Deck not found")
+  
+  cards = deck.cards
+  mastery = calculate_deck_mastery(cards)
+  cards_left = get_cards_left(cards)
+  return len(deck.cards), mastery, cards_left
 
 @router.post("/api/cards/{cardId}/review", response_model=CardReviewResponse)
 async def review_card(
@@ -167,7 +195,7 @@ async def review_card(
   if study_session_card.rating is not None:
     # Already rated.
     mastery = calculate_deck_mastery(deck.cards)
-    cards_left = any_cards_left(deck.cards)
+    cards_left = get_cards_left(deck.cards)
     return CardReviewResponse(
       id=card.id,
       repetition_count=card.repetition_count,
@@ -201,7 +229,7 @@ async def review_card(
   await session.flush()
 
   mastery = calculate_deck_mastery(deck.cards)
-  cards_left = any_cards_left(deck.cards)
+  cards_left = get_cards_left(deck.cards)
 
   await session.commit()
   await session.refresh(card)
@@ -267,8 +295,9 @@ def get_study_session_index_and_page(study_session_cards: Sequence[StudySessionC
         page = "results"
   return (index, page)
 
-def any_cards_left(cards: Sequence[Card]):
+def get_cards_left(cards: Sequence[Card]) -> int:
+  count = 0
   for card in cards:
     if card.next_review_date <= datetime.utcnow():
-      return True
-  return False
+      count += 1
+  return count

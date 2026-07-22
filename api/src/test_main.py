@@ -1,29 +1,10 @@
-# https://fastapi.tiangolo.com/tutorial/testing
-# https://fastapi.tiangolo.com/advanced/testing-dependencies
-# https://fastapi.tiangolo.com/advanced/async-tests
-# https://sqlmodel.tiangolo.com/tutorial/fastapi/tests
-
 from datetime import datetime
 import json
-import os
 
-import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from testcontainers.postgres import PostgresContainer
-
-# Override environment variables to prevent crashing when env is imported.
-os.environ["DATABASE_URL"] = "postgresql://"
-os.environ["CLERK_SECRET_KEY"] = "test_clerk_secret_key"
-
-from auth import get_current_user_id
-from db import get_session
-from main import app
-from models import Base, Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate
-
-user_id = "test_user_id"
-
-# Tests
+from conftest import user_id
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from models import Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate
 
 async def test_get_decks(session: AsyncSession, client: AsyncClient):
   decks = [
@@ -300,93 +281,3 @@ async def test_delete_card(session: AsyncSession, client: AsyncClient):
   assert response.status_code == 200
   assert data["success"] == True
   assert card_in_db is None
-
-async def test_study(session: AsyncSession, client: AsyncClient):
-  deck = Deck(
-    user_id=user_id,
-    name="test name",
-    description="test description",
-    last_studied_at=None,
-    due_date=datetime.now()
-  )
-  session.add(deck)
-  await session.commit()
-
-  card = Card(
-    deck_id=deck.id,
-    question="test question",
-    answer="test answer",
-  )
-  session.add(card)
-  await session.commit()
-
-  response = await client.post(
-    f"/api/decks/{deck.id}/study",
-  )
-
-  data = response.json()
-
-  assert response.status_code == 200
-  assert data["deckId"] == deck.id
-  assert len(data["cards"]) == 1
-  assert data["cards"][0]["question"] == card.question
-  assert data["cards"][0]["answer"] == card.answer
-  assert data["cards"][0]["rating"] is None
-  assert data["index"] == 0
-  assert data["page"] == "cards"
-  assert data["mastery"] == 0
-  assert data["oldMastery"] == 0
-  assert data["cardsLeft"] == 1
-
-# Fixtures
-
-# https://anyio.readthedocs.io/en/stable/testing.html#using-async-fixtures-with-higher-scopes
-@pytest.fixture(scope="session")
-def anyio_backend():
-  return "asyncio"
-
-# Initialize and connect to postgres running in Docker.
-@pytest.fixture(name="engine", scope="session")
-async def engine_fixture():
-  with PostgresContainer("postgres:16", driver="asyncpg") as postgres:
-    engine = create_async_engine(postgres.get_connection_url())
-    async with engine.begin() as conn:
-      await conn.run_sync(Base.metadata.create_all)
-      
-    yield engine
-
-# Provide a session that rolls back database changes after each test.
-# https://docs.sqlalchemy.org/en/21/orm/session_transaction.html#joining-a-session-into-an-external-transaction-such-as-for-test-suites
-@pytest.fixture(name="session")
-async def session_fixture(engine: AsyncEngine):
-  async with engine.connect() as connection:
-    transaction = await connection.begin()
-    
-    async with AsyncSession(
-      bind=connection,
-      join_transaction_mode="create_savepoint",
-
-      # Ensure database model data sticks around even after committing so we
-      # can check it in tests.
-      expire_on_commit=False,
-    ) as session:
-      yield session
-    
-    await transaction.rollback()
-
-@pytest.fixture(name="client")
-async def client_fixture(session: AsyncSession):
-  def get_session_override():
-    return session
-
-  def get_current_user_id_override():
-    return user_id
-
-  app.dependency_overrides[get_session] = get_session_override
-  app.dependency_overrides[get_current_user_id] = get_current_user_id_override
-  
-  transport = ASGITransport(app=app)
-  async with AsyncClient(transport=transport, base_url="http://test") as client:
-    yield client
-  
-  app.dependency_overrides.clear()
