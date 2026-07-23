@@ -124,14 +124,24 @@ async def update_deck(
   db_deck.due_date = deck.due_date
   new_cards: list[Card] = []
   for card in deck.cards:
-    new_card = Card(
-      deck_id=deck_id,
-      question=card.question,
-      answer=card.answer,
-    )
-    if card.id is not None:
-      new_card.id = card.id
-    new_cards.append(new_card)
+    if card.id is None:
+      db_card = Card(
+        deck_id=deck_id,
+        question=card.question,
+        answer=card.answer,
+      )
+      new_cards.append(db_card)
+    else:
+      existing_card = None
+      for db_card in db_deck.cards:
+        if db_card.id == card.id:
+          existing_card = db_card
+          break
+      if existing_card is None:
+          raise HTTPException(status_code=404, detail="Card not found")
+      existing_card.question = card.question
+      existing_card.answer = card.answer
+      new_cards.append(existing_card)
   db_deck.cards = new_cards
     
   await session.commit()
