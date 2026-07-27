@@ -66,6 +66,8 @@ async def test_get_decks(session: AsyncSession, client: AsyncClient):
     assert matched["cardsDueToday"] == 0
     assert matched["totalCards"] == 0
     assert matched["activeStudySession"] == False
+    assert matched["creatorUserId"] == user_id
+    assert matched["creatorDisplayName"] is not None
 
 async def test_create_deck(client: AsyncClient):
   response = await client.post(
@@ -126,6 +128,7 @@ async def test_update_deck(session: AsyncSession, client: AsyncClient):
   deck = DeckUpdate(
     name="new name",
     description="new description",
+    discoverable=True,
     due_date=datetime.now(),
     cards=[
       CardDeckUpdate(
@@ -144,6 +147,7 @@ async def test_update_deck(session: AsyncSession, client: AsyncClient):
   assert response.status_code == 200
   assert data["name"] == deck.name
   assert data["description"] == deck.description
+  assert data["discoverable"] is True
   assert data["dueDate"] == None if deck.due_date is None else deck.due_date.isoformat()
   assert data["id"] == deck_id
 
@@ -375,12 +379,22 @@ async def session_fixture(engine: AsyncEngine):
     await transaction.rollback()
 
 @pytest.fixture(name="client")
-async def client_fixture(session: AsyncSession):
+async def client_fixture(session: AsyncSession, monkeypatch: pytest.MonkeyPatch):
   def get_session_override():
     return session
 
   def get_current_user_id_override():
     return user_id
+
+  # Deck list/detail pull creator names from Clerk — stub it in tests.
+  monkeypatch.setattr(
+    "main.get_clerk_user_profile",
+    lambda _uid: {
+      "username": "tester",
+      "first_name": "Test",
+      "last_name": "User",
+    },
+  )
 
   app.dependency_overrides[get_session] = get_session_override
   app.dependency_overrides[get_current_user_id] = get_current_user_id_override
