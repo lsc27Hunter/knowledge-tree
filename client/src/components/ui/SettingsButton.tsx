@@ -1,101 +1,180 @@
-import { useState, type ChangeEventHandler } from "react";
-import Gear from "../../assets/gear.svg";
-import { ModalHeaderMain, ModalHeaderShell, ModalShell, useModalState, type ModalState } from "./Modal";
+import { toast } from "sonner";
 
-export default function SettingsButton() {
+import Gear from "../../assets/gear.svg";
+import { focusRing, hoverSurface, interactive } from "../../lib/interaction";
+import { useTheme } from "../../theme/ThemeProvider";
+import { IconButton } from "./IconButton";
+import {
+  ModalBody,
+  ModalHeaderMain,
+  ModalHeaderShell,
+  ModalShell,
+  useModalState,
+  type ModalState,
+} from "./Modal";
+
+export default function SettingsButton({
+  variant = "icon",
+  onOpen,
+}: {
+  variant?: "icon" | "row";
+  onOpen?: () => void;
+}) {
   const modalState = useModalState();
+
+  function open() {
+    onOpen?.();
+    modalState.open();
+  }
+
   return (
     <>
-      <button className="cursor-pointer" onClick={modalState.open}>
-        <img src={Gear} alt="settings" />
-      </button>
-      <Modal modalState={modalState} />
+      {variant === "row" ? (
+        <button
+          type="button"
+          className={`${interactive} ${focusRing} flex min-h-11 w-full items-center gap-3 rounded-lg px-3 type-body font-medium text-fg hover:bg-primary-grey/70`}
+          onClick={open}
+        >
+          <img src={Gear} alt="" className="theme-icon h-5 w-5" />
+          Settings
+        </button>
+      ) : (
+        <IconButton
+          icon={Gear}
+          ariaLabel="Open settings"
+          onClick={open}
+        />
+      )}
+      <SettingsModal modalState={modalState} />
     </>
   );
 }
 
-interface ModalProps {
-  modalState: ModalState;
-}
-
-function Modal({ modalState }: ModalProps) {
+function SettingsModal({ modalState }: { modalState: ModalState }) {
   return (
-    <ModalShell state={modalState}>
-      <ModalContent />
+    <ModalShell state={modalState} size="sm">
+      <ModalHeaderShell>
+        <ModalHeaderMain>Settings</ModalHeaderMain>
+      </ModalHeaderShell>
+      <ModalBody className="flex flex-col gap-6">
+        <AppearanceSection />
+        <NotificationsSection />
+      </ModalBody>
     </ModalShell>
   );
 }
 
-function ModalContent() {
-  return (
-    <div className="relative w-80 max-w-full">
-      <Header />
-      <div className="px-8 pt-4 pb-6 font-inter max-h-[75vh] overflow-y-auto">
-        <Notifications />
-      </div>
-    </div>
-  );
-}
+function AppearanceSection() {
+  const { theme, setTheme } = useTheme();
 
-function Header() {
   return (
-    <ModalHeaderShell>
-      <ModalHeaderMain>Settings</ModalHeaderMain>
-    </ModalHeaderShell>
-  );
-}
-
-function Notifications() {
-  const notificationsSupported = areNotificationsSupported();
-  const [name, setName] = useState("");
-  const [notifications, setNotifications] = useState(notificationsSupported && Notification.permission === "granted");
-  const [permissionDenied, setPermissionDenied] = useState(false);
-  const onChangeNotifications: ChangeEventHandler<HTMLInputElement, HTMLInputElement> = e => {
-    if (e.target.checked) {
-      if (!notificationsSupported) return;
-      Notification.requestPermission().then(res => {
-        setNotifications(res === "granted");
-        setPermissionDenied(res === "denied");
-      });
-    } else {
-      setPermissionDenied(false);
-      setNotifications(false);
-    }
-  };
-  function sendNotification() {
-    setTimeout(() => {
-      new Notification(name);
-    }, 1000);
-  }
-  return (
-    <div className="font-inter">
-      {notificationsSupported ?
-        <div>
-          <div className="flex items-center text-white gap-x-2 mt-4">
-            <div>Notifications</div>
-            <input type="checkbox" checked={notifications} onChange={onChangeNotifications} />
-          </div>
-          {permissionDenied && <div className="text-gray-500">Permission was not granted. You may need to grant permission through your browser.</div>}
-        </div> :
-        <div>Your browser does not support notifications.</div>
-      }
-      <div className="flex flex-col items-start w-full">
-        <input
-          className="px-3 py-2 text-white bg-primary-grey border border-primary-light-grey rounded mt-6 w-full"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+    <section className="flex flex-col gap-3">
+      <h3 className="type-title text-fg">Appearance</h3>
+      <p className="type-caption text-primary-light-grey">
+        Choose how KnowledgeTree looks on this device.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <ThemeChoice
+          label="Dark"
+          selected={theme === "dark"}
+          onSelect={() => setTheme("dark")}
         />
-        <div className="w-full text-end">
-          <button className="bg-accent text-white mt-4 px-4 py-1 rounded-lg cursor-pointer" onClick={sendNotification}>Send!</button>
-        </div>
+        <ThemeChoice
+          label="Light"
+          selected={theme === "light"}
+          onSelect={() => setTheme("light")}
+        />
       </div>
-    </div>
+    </section>
+  );
+}
+
+function ThemeChoice({
+  label,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`${interactive} ${focusRing} rounded-xl border px-3 py-3 type-body font-medium ${
+        selected
+          ? "border-accent bg-accent/10 text-fg ring-1 ring-accent"
+          : `border-border bg-primary-grey text-primary-light-grey ${hoverSurface}`
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function NotificationsSection() {
+  const supported = areNotificationsSupported();
+  const permission =
+    supported && typeof Notification !== "undefined"
+      ? Notification.permission
+      : "denied";
+
+  async function enableNotifications() {
+    if (!supported) return;
+    try {
+      const result = await Notification.requestPermission();
+      if (result === "granted") {
+        toast.success("Notifications enabled");
+      } else if (result === "denied") {
+        toast.error("Notifications blocked", {
+          description: "You can change this in your browser settings.",
+        });
+      }
+    } catch {
+      toast.error("Couldn't update notification permission");
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-3 border-t border-border pt-5">
+      <h3 className="type-title text-fg">Notifications</h3>
+      <p className="type-caption text-primary-light-grey">
+        Optional browser reminders for review sessions. Full scheduling is still
+        in progress.
+      </p>
+      {!supported ? (
+        <p className="type-caption text-primary-light-grey">
+          This browser does not support notifications.
+        </p>
+      ) : permission === "granted" ? (
+        <p className="type-caption text-success-green">Notifications are allowed.</p>
+      ) : permission === "denied" ? (
+        <p className="type-caption text-danger-red">
+          Permission was denied. Enable it in your browser settings if you want
+          reminders.
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            void enableNotifications();
+          }}
+          className={`${interactive} ${focusRing} w-fit rounded-lg bg-accent px-3 py-2 type-caption font-medium text-white hover:bg-accent-hover`}
+        >
+          Allow Notifications
+        </button>
+      )}
+    </section>
   );
 }
 
 function areNotificationsSupported() {
-  // https://developer.mozilla.org/en-US/docs/Web/API/Notification/requestPermission_static
-  // https://web.dev/articles/push-notifications-subscribing-a-user
-  return "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+  return (
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window
+  );
 }
-

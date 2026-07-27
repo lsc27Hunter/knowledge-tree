@@ -14,6 +14,7 @@ export function ProtectedRoute() {
   }
 
   if (!isSignedIn) {
+    // Send to landing (not /sign-in) so Clerk sign-out doesn't flash the sign-in page.
     return <Navigate to="/" replace />;
   }
 

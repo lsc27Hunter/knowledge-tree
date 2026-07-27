@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button } from "./Button";
-import { MasteryBar } from "./MasteryBar";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 import {
   createDeck,
@@ -9,26 +9,31 @@ import {
   type CardCreate,
   type DeckGetResponse,
 } from "../../api";
-
 import ArrowRight from "../../assets/arrow-right.svg";
-import Logo from "../../assets/git_knowledgetree-icon.svg";
 import Book from "../../assets/book.svg";
 import Clock from "../../assets/clock.svg";
 import Danger from "../../assets/danger.svg";
-import Trash from "../../assets/trash.svg";
-import EditDeckButton from "./EditDeckButton";
 import Preview from "../../assets/preview.svg";
+import Trash from "../../assets/trash.svg";
+import { Button } from "./Button";
+import { ConfirmDialog } from "./ConfirmDialog";
+import EditDeckButton from "./EditDeckButton";
+import { IconButton } from "./IconButton";
+import { MasteryBar } from "./MasteryBar";
+import MergeDeckButton from "./MergeDeckButton";
 import {
+  ModalBody,
+  ModalFooter,
   ModalHeaderMain,
   ModalHeaderShell,
   ModalShell,
   useModalState,
   type ModalState,
 } from "./Modal";
-import { useNavigate } from "react-router-dom";
 
 interface DeckCardProps {
   deckData: Deck;
+  onChanged?: () => void;
 }
 
 export interface Deck {
@@ -50,8 +55,11 @@ export interface Deck {
 export function DeckCard({
   deckData,
   isDiscoveryPage = false,
+  onChanged,
 }: DeckCardProps & { isDiscoveryPage?: boolean }) {
   const previewModalState = useModalState();
+  const deleteModalState = useModalState();
+  const [isDeleting, setIsDeleting] = useState(false);
   const deckId = deckData.id;
   const dueDateOnly = deckData.dueDate?.slice(0, 10);
   const todayIsoDate = new Date().toISOString().slice(0, 10);
@@ -59,101 +67,101 @@ export function DeckCard({
     deckData.nextReviewDate,
   );
 
+  async function handleDelete() {
+    setIsDeleting(true);
+    const toastId = toast.loading("Deleting deck…");
+    try {
+      const result = await deleteDeck({ path: { deckId } });
+      if (result.error) throw result.error;
+      toast.success("Deck deleted", { id: toastId });
+      deleteModalState.close();
+      onChanged?.();
+    } catch (error) {
+      toast.error("Couldn't delete deck", {
+        id: toastId,
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
-    <div className="min-h-44 w-full rounded-2xl bg-primary-grey p-2 text-white sm:min-h-56 sm:p-4">
-      <div className="flex flex-row items-center gap-2">
-        {dueDateOnly === todayIsoDate && (
-          <img
-            src={Danger}
-            alt="Due Today"
-            className="inline-block w-4 h-4 mr-1"
-            title="Due Today"
-          />
-        )}
-        <div className="max-w-[100%] truncate whitespace-nowrap">
-          {deckData?.name}
+    <article className={`group flex min-h-44 w-full flex-col rounded-2xl border border-border bg-primary-grey p-3 text-fg shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-accent/40 hover:shadow-[var(--shadow-card)] sm:min-h-56 sm:p-4`}>
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {dueDateOnly === todayIsoDate ? (
+            <img
+              src={Danger}
+              alt=""
+              className="inline-block h-4 w-4 shrink-0"
+              title="Due today"
+            />
+          ) : null}
+          <h3 className="type-title min-w-0 truncate" title={deckData.name}>
+            {deckData.name}
+          </h3>
+          {!isDiscoveryPage && deckData.discoverable ? (
+            <span
+              className="shrink-0 rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 type-caption font-medium text-accent"
+              title="Visible in Discover for other users"
+            >
+              Public
+            </span>
+          ) : null}
         </div>
-        <div className="flex-1" />
-        <div className="flex flex-row items-center gap-2">
+        <div className="-ml-1.5 flex shrink-0 flex-row items-center gap-0.5 self-start opacity-90 transition-opacity group-hover:opacity-100 sm:ml-0 sm:self-auto">
           {isDiscoveryPage ? (
-            <Button
-              text=""
-              width="fit"
-              color="primary-grey"
-              textColor="white"
+            <IconButton
               icon={Preview}
-              iconPosition="right"
-              iconSize="w-6 h-6"
               ariaLabel="Preview deck"
               onClick={previewModalState.open}
             />
           ) : (
-            <EditDeckButton deckId={deckId} />
-          )}
-          {!isDiscoveryPage && (
             <>
-              <Button
-                text=""
-                width="fit"
-                color="primary-grey"
-                textColor="white"
-                icon={Logo}
-                iconPosition="right"
-                iconSize="w-6 h-6"
+              <EditDeckButton deckId={deckId} onSaved={onChanged} />
+              <MergeDeckButton
+                deckId={deckId}
+                deckName={deckData.name}
+                onMerged={onChanged}
               />
-              <Button
-                text=""
-                width="fit"
-                color="primary-grey"
-                textColor="white"
+              <IconButton
                 icon={Trash}
-                iconPosition="right"
-                iconSize="w-6 h-6"
-                onClick={async () => {
-                  const confirmed = window.confirm(
-                    "Are you sure you want to delete this deck? This action cannot be undone.",
-                  );
-                  if (!confirmed) return;
-
-                  try {
-                    await deleteDeck({
-                      path: { deckId },
-                    });
-                    window.location.reload();
-                  } catch (error) {
-                    console.error("Failed to delete deck:", error);
-                  }
-                }}
+                ariaLabel="Delete deck"
+                tone="danger"
+                themeIcon={false}
+                onClick={deleteModalState.open}
               />
             </>
           )}
         </div>
       </div>
-      <div className="mt-1 min-h-8 text-xsmall text-primary-light-grey">
-        {deckData?.description ?? ""}
-      </div>
 
-      {!isDiscoveryPage && deckData.lastStudiedAt && (
+      <p className="type-caption mt-1 line-clamp-2 min-h-8 break-words text-primary-light-grey">
+        {deckData.description ?? ""}
+      </p>
+
+      {!isDiscoveryPage && deckData.lastStudiedAt ? (
         <div className="mt-3">
           <MasteryBar
             percentage={Number((deckData.mastery * 100).toFixed(0))}
           />
         </div>
-      )}
-      <div className="mt-1 mb-10 text-xsmall text-primary-light-grey">
-        <img src={Book} alt="Book" className="inline-block w-4 h-4 mr-1" />{" "}
-        {deckData.totalCards} Cards
+      ) : null}
+
+      <div className="type-caption mt-2 mb-6 flex items-center gap-1.5 text-primary-light-grey">
+        <img src={Book} alt="" className="theme-icon-soft inline-block h-4 w-4" />
+        {deckData.totalCards} {deckData.totalCards === 1 ? "card" : "cards"}
       </div>
 
-      <div className="mx-auto flex w-9/10 items-center justify-center p-2 sm:w-9/10 font-medium">
+      <div className="mt-auto flex w-full items-center justify-center font-medium">
         {isDiscoveryPage ? (
           <Button
-            text="Add to my dashboard"
+            text="Preview & Add"
             width="full"
             color="accent"
             textColor="white"
-            icon={!isDiscoveryPage ? ArrowRight : undefined}
-            iconPosition="right"
             onClick={previewModalState.open}
           />
         ) : timeUntilNextReview === null ? (
@@ -164,25 +172,42 @@ export function DeckCard({
             textColor="white"
             icon={ArrowRight}
             iconPosition="right"
+            themeIcon
             to={`/study/${deckId}`}
           />
         ) : (
-          <div className="bg-success-green text-white w-full py-2 px-4 rounded flex items-center justify-center gap-x-2">
-            <div>{timeUntilNextReview}</div>
-            <img className="w-4 h-4" src={Clock} alt="Clock" />
+          <div className="flex w-full items-center justify-center gap-x-2 rounded-lg bg-success-green/15 px-4 py-2 text-success-green ring-1 ring-success-green/30">
+            <span className="text-small font-medium">{timeUntilNextReview}</span>
+            <img className="h-4 w-4" src={Clock} alt="" />
           </div>
         )}
       </div>
+
       {isDiscoveryPage ? (
-        <div className="mt-1 text-xsmall text-primary-light-grey flex items-center justify-center gap-1">
+        <div className="mt-2 flex items-center justify-center gap-1 text-xsmall text-primary-light-grey">
           Created by{" "}
-          {deckData.creatorDisplayName ?? deckData.creatorUsername ?? "Unknown"}
+          <span className="text-fg-subtle">
+            {deckData.creatorDisplayName ??
+              deckData.creatorUsername ??
+              "Unknown"}
+          </span>
         </div>
       ) : null}
+
       {isDiscoveryPage ? (
         <PreviewModal deckId={deckId} modalState={previewModalState} />
-      ) : null}
-    </div>
+      ) : (
+        <ConfirmDialog
+          state={deleteModalState}
+          title="Delete Deck?"
+          description={`"${deckData.name}" and all of its cards will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete Deck"
+          tone="danger"
+          isLoading={isDeleting}
+          onConfirm={handleDelete}
+        />
+      )}
+    </article>
   );
 }
 
@@ -194,7 +219,7 @@ function PreviewModal({
   modalState: ModalState;
 }) {
   return (
-    <ModalShell state={modalState}>
+    <ModalShell state={modalState} size="lg">
       <PreviewContent deckId={deckId} onClose={modalState.close} />
     </ModalShell>
   );
@@ -222,9 +247,7 @@ function PreviewContent({
       try {
         const result = await getDiscoverableDeck({ path: { deckId } });
         if (cancelled) return;
-        if (result.error) {
-          throw result.error;
-        }
+        if (result.error) throw result.error;
         setDeck(result.data ?? null);
       } catch (error) {
         if (cancelled) return;
@@ -232,14 +255,11 @@ function PreviewContent({
           error instanceof Error ? error.message : "Failed to load deck.",
         );
       } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+        if (!cancelled) setIsLoading(false);
       }
     }
 
     void loadDeck();
-
     return () => {
       cancelled = true;
     };
@@ -265,122 +285,111 @@ function PreviewContent({
         },
       });
 
-      if (result.error) {
-        throw result.error;
-      }
+      if (result.error) throw result.error;
 
       onClose();
+      toast.success("Deck added to your dashboard");
       navigate("/dashboard");
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to add deck.",
       );
+      toast.error("Couldn't add deck", {
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+      });
     } finally {
       setIsSaving(false);
     }
   }
 
   return (
-    <div className="w-[min(48rem,calc(100vw-3rem))] max-w-full">
+    <>
       <ModalHeaderShell>
         <ModalHeaderMain>
-          {deck ? `Preview '${deck.name}'` : "Preview deck"}
+          {deck ? `Preview '${deck.name}'` : "Preview Deck"}
         </ModalHeaderMain>
       </ModalHeaderShell>
-      <div className="max-h-[75vh] overflow-y-auto px-8 pb-8 pt-4 font-inter">
+      <ModalBody>
         {isLoading ? (
-          <div className="text-primary-light-grey">Loading deck...</div>
-        ) : errorMessage ? (
+          <div className="text-primary-light-grey">Loading deck…</div>
+        ) : errorMessage && !deck ? (
           <div className="text-danger-red">{errorMessage}</div>
         ) : deck ? (
           <div className="flex flex-col gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <ReadOnlyField label="Deck name" value={deck.name} />
+              <ReadOnlyField label="Deck Name" value={deck.name} />
               <ReadOnlyField
-                label="Description"
-                value={deck.description ?? ""}
-              />
-              <ReadOnlyField
-                className="text-purple-500"
-                label="Created by"
+                label="Created By"
                 value={
-                  deck.creatorDisplayName ?? deck.creatorUsername ?? "Unknown"
+                  deck.creatorDisplayName ??
+                  deck.creatorUsername ??
+                  "Unknown"
                 }
               />
-              <ReadOnlyField
-                label="Due date"
-                value={deck.dueDate ? deck.dueDate.slice(0, 10) : ""}
-              />
-              <ReadOnlyField
-                label="Discoverable"
-                value={deck.discoverable ? "Yes" : "No"}
-              />
             </div>
-
-            <div className="font-semibold text-primary-light-grey">Cards</div>
-            <div className="flex flex-col gap-3">
-              {deck.cards.map((card) => (
-                <div
-                  key={card.id}
-                  className="rounded border border-primary-light-grey bg-primary-grey"
-                >
-                  <div className="flex items-center gap-2 border-b border-primary-light-grey p-3">
-                    <span className="w-4 text-primary-light-grey">Q</span>
-                    <div className="text-white">{card.question}</div>
-                  </div>
-                  <div className="flex items-start gap-2 p-3">
-                    <span className="w-4 text-success-green">A</span>
-                    <div className="whitespace-pre-line text-white">
-                      {card.answer}
+            <ReadOnlyField
+              label="Description"
+              value={deck.description?.trim() || "No description"}
+            />
+            <div>
+              <div className="mb-2 type-caption font-semibold text-primary-light-grey">
+                Cards ({deck.cards.length})
+              </div>
+              <div className="flex max-h-none flex-col gap-2 md:max-h-72 md:overflow-y-auto">
+                {deck.cards.map((card) => (
+                  <div
+                    key={card.id}
+                    className="rounded-lg border border-border bg-background/50 px-3 py-2"
+                  >
+                    <div className="flex gap-2 type-body">
+                      <span className="w-4 shrink-0 text-success-green">Q</span>
+                      <span className="min-w-0 break-words text-fg [overflow-wrap:anywhere]">
+                        {card.question}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex gap-2 type-body">
+                      <span className="w-4 shrink-0 text-accent">A</span>
+                      <span className="min-w-0 break-words whitespace-pre-line text-primary-light-grey [overflow-wrap:anywhere]">
+                        {card.answer}
+                      </span>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-
             {errorMessage ? (
-              <div className="text-danger-red text-sm">{errorMessage}</div>
+              <div className="text-sm text-danger-red">{errorMessage}</div>
             ) : null}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                text="Close"
-                width="fit"
-                color="background"
-                textColor="primary-light-grey"
-                onClick={onClose}
-              />
-              <Button
-                text={isSaving ? "Adding..." : "Save to my dashboard"}
-                width="fit"
-                color="accent"
-                textColor="white"
-                onClick={addToDashboard}
-              />
-            </div>
           </div>
         ) : null}
-      </div>
-    </div>
+      </ModalBody>
+      {deck ? (
+        <ModalFooter>
+          <Button
+            text={isSaving ? "Adding…" : "Add To My Dashboard"}
+            width="full"
+            color="accent"
+            textColor="white"
+            disabled={isSaving}
+            onClick={() => {
+              void addToDashboard();
+            }}
+          />
+        </ModalFooter>
+      ) : null}
+    </>
   );
 }
 
-function ReadOnlyField({
-  label,
-  value,
-  className = "",
-}: {
-  label: string;
-  value: string;
-  className?: string;
-}) {
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="font-semibold text-primary-light-grey">{label}</label>
-      <div
-        className={`rounded border border-primary-light-grey bg-primary-grey px-3 py-2 text-white ${className}`}
-      >
-        {value || "-"}
+      <span className="text-xsmall font-semibold text-primary-light-grey">
+        {label}
+      </span>
+      <div className="rounded-lg border border-border bg-primary-grey px-3 py-2 text-small break-words text-fg [overflow-wrap:anywhere]">
+        {value}
       </div>
     </div>
   );
