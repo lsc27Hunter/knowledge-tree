@@ -7,11 +7,24 @@ from fastapi import FastAPI, Form, HTTPException, Path, UploadFile
 from fastapi.routing import APIRoute
 from sqlalchemy import CursorResult, delete, select
 from sqlalchemy.orm import joinedload, selectinload
-from auth import CurrentUserId
+from auth import CurrentUserId, get_clerk_user_profile
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeckGetResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUpdate, DeckUpdateResponse, DeckUploadResponse
 from routers.study import router as study_router
 from utils.mastery import calculate_deck_mastery, card_mastery
+
+
+def _creator_metadata(user_id: str) -> dict[str, str | None]:
+  profile = get_clerk_user_profile(user_id)
+  username = profile.get("username")
+  first_name = profile.get("first_name")
+  last_name = profile.get("last_name")
+  display_name = username or " ".join(part for part in [first_name, last_name] if part).strip() or user_id
+  return {
+    "creator_user_id": user_id,
+    "creator_username": username,
+    "creator_display_name": display_name,
+  }
 
 # For generating openapi.json.
 # https://fastapi.tiangolo.com/advanced/generate-clients/#custom-generate-unique-id-function
@@ -59,6 +72,7 @@ async def get_decks(
   decks = (await session.execute(query)).scalars().all()
   responses: list[DeckListResponse] = []
   for deck in decks:
+    creator = _creator_metadata(deck.user_id)
     cards = deck.cards
     study_session = deck.study_session
     now = datetime.utcnow()
@@ -69,6 +83,7 @@ async def get_decks(
     responses.append(
       DeckListResponse(
         id=deck.id,
+        **creator,
         name=deck.name,
         description=deck.description,
         discoverable=deck.discoverable,
@@ -92,6 +107,7 @@ async def get_discoverable_decks(session: SessionDep):
   )).scalars().all()
   responses: list[DeckListResponse] = []
   for deck in decks:
+    creator = _creator_metadata(deck.user_id)
     cards = deck.cards
     now = datetime.utcnow()
     if len(cards) == 0:
@@ -101,6 +117,7 @@ async def get_discoverable_decks(session: SessionDep):
     responses.append(
       DeckListResponse(
         id=deck.id,
+        **creator,
         name=deck.name,
         description=deck.description,
         discoverable=deck.discoverable,
@@ -114,6 +131,48 @@ async def get_discoverable_decks(session: SessionDep):
       )
     )
   return responses
+
+@app.get("/api/discovery/decks/{deckId}", response_model=DeckGetResponse)
+async def get_discoverable_deck(
+  deck_id: Annotated[int, Path(alias="deckId")],
+  session: SessionDep,
+):
+  deck = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards))
+    .where(Deck.id == deck_id)
+  )).scalar_one_or_none()
+  if not deck or not deck.discoverable:
+    raise HTTPException(status_code=404, detail="Deck not found")
+
+  cards = deck.cards
+  creator = _creator_metadata(deck.user_id)
+  now = datetime.utcnow()
+  if len(cards) == 0:
+    next_review_date = None
+  else:
+    next_review_date = min([c.next_review_date for c in cards])
+
+  mastery = calculate_deck_mastery(cards)
+  return DeckGetResponse(
+    id=deck.id,
+    **creator,
+    name=deck.name,
+    description=deck.description,
+    discoverable=deck.discoverable,
+    due_date=deck.due_date,
+    cards=[
+      CardDeckGetResponse(
+        id=card.id,
+        question=card.question,
+        answer=card.answer,
+      ) for card in cards
+    ],
+    mastery=int(round(mastery)),
+    cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+    total_cards=len(cards),
+    retention_rate=int(round(mastery)),
+  )
 
 @app.post("/api/decks", response_model=DeckCreateResponse)
 async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUserId):
@@ -197,10 +256,12 @@ async def get_deck(
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
   cards = (await session.execute(select(Card).where(Card.deck_id == deck_id))).scalars().all()
+  creator = _creator_metadata(deck.user_id)
   now = datetime.utcnow()
   mastery = calculate_deck_mastery(cards)
   return DeckGetResponse(
     id=deck.id,
+    **creator,
     name=deck.name,
     description=deck.description,
     discoverable=deck.discoverable,

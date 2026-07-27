@@ -1,6 +1,6 @@
 import { UserButton, useUser } from "@clerk/react";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getDiscoverableDecks, type DeckListResponse } from "../api";
 
@@ -14,6 +14,9 @@ import { Spinner } from "../components/ui/Spinner";
 function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
   return {
     id: deck.id,
+    creatorUserId: deck.creatorUserId,
+    creatorUsername: deck.creatorUsername,
+    creatorDisplayName: deck.creatorDisplayName,
     name: deck.name,
     description: deck.description,
     mastery: deck.mastery / 100,
@@ -27,14 +30,9 @@ function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
 }
 
 export default function DiscoveryPage() {
-  const { isLoaded } = useUser();
-  const [sortingOption, setSortingOption] = useState("Next Review");
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const { isLoaded, user } = useUser();
   const [decks, setDecks] = useState<DashboardDeck[]>([]);
   const [decksError, setDecksError] = useState<string | null>(null);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
-
-  const sortingOptions = ["Next Review", "Due Date", "Mastery", "Last Studied"];
 
   const loadDecks = useCallback(async () => {
     if (!isLoaded) {
@@ -48,32 +46,18 @@ export default function DiscoveryPage() {
       if (result.error) {
         throw result.error;
       }
-      setDecks((result.data ?? []).map(toDashboardDeck));
+      const currentUserId = user?.id;
+      setDecks(
+        (result.data ?? [])
+          .map(toDashboardDeck)
+          .filter((deck) => deck.creatorUserId !== currentUserId),
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to load decks.";
       setDecksError(message);
     }
-  }, [isLoaded]);
-
-  useEffect(() => {
-    const closeMenuOnOutsideClick = (event: MouseEvent | TouchEvent) => {
-      if (
-        sortMenuRef.current &&
-        !sortMenuRef.current.contains(event.target as Node)
-      ) {
-        setIsSortMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", closeMenuOnOutsideClick);
-    document.addEventListener("touchstart", closeMenuOnOutsideClick);
-
-    return () => {
-      document.removeEventListener("mousedown", closeMenuOnOutsideClick);
-      document.removeEventListener("touchstart", closeMenuOnOutsideClick);
-    };
-  }, []);
+  }, [isLoaded, user?.id]);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -89,29 +73,6 @@ export default function DiscoveryPage() {
       </div>
     );
   }
-
-  const sortedDecks = [...decks].sort((a, b) => {
-    if (sortingOption === "Next Review") {
-      if (!a.nextReviewDate) return 1;
-      if (!b.nextReviewDate) return -1;
-      return (
-        new Date(a.nextReviewDate).getTime() -
-        new Date(b.nextReviewDate).getTime()
-      );
-    } else if (sortingOption === "Due Date") {
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    } else if (sortingOption === "Mastery") {
-      return b.mastery - a.mastery;
-    } else if (sortingOption === "Last Studied") {
-      return (
-        new Date(b.lastStudiedAt).getTime() -
-        new Date(a.lastStudiedAt).getTime()
-      );
-    }
-    return 0;
-  });
 
   return (
     <div className="mb-4">
@@ -129,44 +90,17 @@ export default function DiscoveryPage() {
         </div>
       ) : null}
 
-      <div className="mx-4 mt-2 flex justify-center sm:mx-15 sm:justify-end">
-        <div className="relative" ref={sortMenuRef}>
-          <button
-            type="button"
-            className="rounded-lg bg-background px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-accent"
-            aria-haspopup="menu"
-            aria-expanded={isSortMenuOpen}
-            onClick={() => setIsSortMenuOpen((open) => !open)}
-          >
-            Sort by {sortingOption} v
-          </button>
-
-          {isSortMenuOpen ? (
-            <div
-              role="menu"
-              className="absolute left-1/2 top-full z-40 mt-2 w-48 -translate-x-1/2 rounded-lg border border-primary-grey bg-background p-1 shadow-lg sm:left-auto sm:right-0 sm:translate-x-0"
-            >
-              {sortingOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  role="menuitem"
-                  className="block w-full rounded-md px-3 py-2 text-left text-white hover:bg-primary-grey"
-                  onClick={() => {
-                    setSortingOption(option);
-                    setIsSortMenuOpen(false);
-                  }}
-                >
-                  Sort by {option}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+      <div className="mx-4 mt-2 flex justify-center sm:mx-15 sm:justify-end"></div>
+      <div className="font-semibold text-2xl text-white mx-15 mt-15">
+        Discoverable Decks
+      </div>
+      <div className="mx-15 mt-2 text-small text-primary-light-grey">
+        Browse decks created by other users. Preview Cards and add them to your
+        own collection to study.
       </div>
       <div className="mx-15 mt-15 grid grid-cols-1 gap-15 md:grid-cols-2 xl:grid-cols-3">
-        {sortedDecks.map((deck) => (
-          <DeckCard key={deck.id} deckData={deck} />
+        {decks.map((deck) => (
+          <DeckCard key={deck.id} deckData={deck} isDiscoveryPage={true} />
         ))}
       </div>
     </div>

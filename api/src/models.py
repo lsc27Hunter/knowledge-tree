@@ -70,6 +70,9 @@ class APISchema(BaseModel):
 
 class DeckListResponse(APISchema):
   id: int
+  creator_user_id: str
+  creator_username: str | None
+  creator_display_name: str
   name: str
   description: str | None
   due_date: datetime | None
@@ -121,6 +124,9 @@ class DeckUpdateResponse(APISchema):
 
 class DeckGetResponse(APISchema):
   id: int
+  creator_user_id: str
+  creator_username: str | None
+  creator_display_name: str
   name: str
   description: str
   discoverable: bool
