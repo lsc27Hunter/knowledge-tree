@@ -5,6 +5,8 @@ import { Button } from "./Button";
 import CreateDeckButton from "./CreateDeckButton";
 import SettingsButton from "./SettingsButton";
 
+import Globe from "../../assets/globe.svg";
+
 interface NavbarProps {
   version: "Landing" | "Dashboard" | "Blank";
   userButton?: ReactNode;
@@ -19,7 +21,7 @@ export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
       className={`sticky top-0 z-50 flex w-full gap-3 border-b border-primary-grey bg-background/95 p-4 backdrop-blur ${isLanding ? "flex-col items-center sm:flex-row" : "flex-wrap items-center"}`}
     >
       <Link
-        to="/"
+        to="/dashboard"
         aria-label="Go to home"
         className="flex shrink-0 items-center"
       >
@@ -47,6 +49,16 @@ export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap sm:gap-4">
           <CreateDeckButton onCreated={onDeckCreated} />
           <SettingsButton />
+          <Button
+            text=""
+            width="fit"
+            color="background"
+            textColor="white"
+            icon={Globe}
+            iconPosition="right"
+            iconSize="w-6 h-6"
+            to="/discovery"
+          />
           {userButton}
         </div>
       ) : null}

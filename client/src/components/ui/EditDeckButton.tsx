@@ -1,24 +1,21 @@
-import React, {
-  useEffect,
-  useState,
-} from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "./Button";
 import EditIcon from "../../assets/edit.svg";
+import { getDeck, updateDeck, type CardDeckUpdate } from "../../api";
 import {
-  getDeck,
-  updateDeck,
-  type CardDeckUpdate,
-} from "../../api";
-import { ModalHeaderMain, ModalHeaderShell, ModalShell, useModalState, type ModalState } from "./Modal";
+  ModalHeaderMain,
+  ModalHeaderShell,
+  ModalShell,
+  useModalState,
+  type ModalState,
+} from "./Modal";
 import Papa from "papaparse";
 
 interface EditDeckButtonProps {
   deckId: number;
 }
 
-export default function EditDeckButton({
-  deckId,
-}: EditDeckButtonProps) {
+export default function EditDeckButton({ deckId }: EditDeckButtonProps) {
   const modalState = useModalState();
   return (
     <>
@@ -45,10 +42,7 @@ interface ModalProps {
 function Modal({ deckId, modalState }: ModalProps) {
   return (
     <ModalShell state={modalState}>
-      <Form
-        deckId={deckId}
-        onSuccess={modalState.close}
-      />
+      <Form deckId={deckId} onSuccess={modalState.close} />
     </ModalShell>
   );
 }
@@ -63,17 +57,19 @@ function Form({ deckId, onSuccess }: FormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [isDiscoverable, setIsDiscoverable] = useState(false);
   const [cards, setCards] = useState<CardDeckUpdate[]>([blankCard()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    getDeck({ path: { deckId }}).then(res => {
+    getDeck({ path: { deckId } }).then((res) => {
       if (res.data) {
         setInitialName(res.data.name);
         setName(res.data.name);
         setDescription(res.data.description);
         setDueDate(res.data.dueDate?.split("T")[0] ?? "");
+        setIsDiscoverable(res.data.discoverable);
         setCards(res.data.cards);
       }
     });
@@ -128,7 +124,11 @@ function Form({ deckId, onSuccess }: FormProps) {
     }
 
     const cleanedCards = cards
-      .map((c) => ({ id: c.id, question: c.question.trim(), answer: c.answer.trim() }))
+      .map((c) => ({
+        id: c.id,
+        question: c.question.trim(),
+        answer: c.answer.trim(),
+      }))
       .filter((c) => c.question || c.answer);
 
     if (cleanedCards.length === 0) {
@@ -150,6 +150,7 @@ function Form({ deckId, onSuccess }: FormProps) {
           name: trimmedName,
           description: description.trim() || "",
           dueDate: dueDate ? `${dueDate}T00:00:00` : null,
+          discoverable: isDiscoverable,
           cards: cleanedCards,
         },
       });
@@ -216,6 +217,15 @@ function Form({ deckId, onSuccess }: FormProps) {
               onChange={(e) => setDueDate(e.target.value)}
             />
           </div>
+          <label className="mt-1 flex items-center gap-2 text-primary-light-grey font-semibold">
+            <input
+              className="h-4 w-4 accent-accent"
+              type="checkbox"
+              checked={isDiscoverable}
+              onChange={(e) => setIsDiscoverable(e.target.checked)}
+            />
+            Discoverable deck
+          </label>
 
           <div className="mt-2 font-semibold text-primary-light-grey">
             Cards
@@ -249,7 +259,6 @@ function Form({ deckId, onSuccess }: FormProps) {
                     placeholder="Answer"
                     value={card.answer}
                     onChange={(e) => updateCard(i, "answer", e.target.value)}
-                    
                   />
                 </div>
               </div>
@@ -294,7 +303,8 @@ function Form({ deckId, onSuccess }: FormProps) {
 }
 
 function Header({ initialDeckName }: { initialDeckName: string | null }) {
-  const title = "Edit" + (initialDeckName === null ? "" : ` '${initialDeckName}'`)
+  const title =
+    "Edit" + (initialDeckName === null ? "" : ` '${initialDeckName}'`);
   return (
     <ModalHeaderShell>
       <ModalHeaderMain>{title}</ModalHeaderMain>

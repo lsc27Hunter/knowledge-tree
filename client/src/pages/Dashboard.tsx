@@ -5,7 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getDecks, type DeckListResponse } from "../api";
 
 import { Navbar } from "../components/ui/Navbar";
-import { DeckCard, type Deck as DashboardDeck } from "../components/ui/DeckCard";
+import {
+  DeckCard,
+  type Deck as DashboardDeck,
+} from "../components/ui/DeckCard";
 import { Spinner } from "../components/ui/Spinner";
 
 import Checkmark from "../assets/checkmark-circle.svg";
@@ -23,6 +26,7 @@ function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
     totalCards: deck.totalCards,
     lastStudiedAt: deck.lastStudiedAt ?? new Date(0).toISOString(),
     activeStudySession: deck.activeStudySession,
+    discoverable: deck.discoverable,
   };
 }
 
@@ -33,7 +37,7 @@ export default function DashboardPage() {
   const [decks, setDecks] = useState<DashboardDeck[]>([]);
   const [decksError, setDecksError] = useState<string | null>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
-
+  console.log(decks);
   const sortingOptions = ["Next Review", "Due Date", "Mastery", "Last Studied"];
 
   const loadDecks = useCallback(async () => {
@@ -103,7 +107,10 @@ export default function DashboardPage() {
     if (sortingOption === "Next Review") {
       if (!a.nextReviewDate) return 1;
       if (!b.nextReviewDate) return -1;
-      return new Date(a.nextReviewDate).getTime() - new Date(b.nextReviewDate).getTime();
+      return (
+        new Date(a.nextReviewDate).getTime() -
+        new Date(b.nextReviewDate).getTime()
+      );
     } else if (sortingOption === "Due Date") {
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;

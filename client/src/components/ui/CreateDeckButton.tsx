@@ -237,6 +237,7 @@ function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
   const initialDeckName = file.name.replace(/\.csv$/, "");
   const [parsedCards, setParsedCards] = useState<ParsedCard[] | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDiscoverable, setIsDiscoverable] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   useEffect(() => {
     Papa.parse(fileText, {
@@ -263,6 +264,7 @@ function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
           deckName: formData.get("deck-name")?.toString() ?? "",
           description: formData.get("description")?.toString() ?? "",
           dueDate: formData.get("dueDate")?.toString() || null,
+          discoverable: isDiscoverable,
           file,
         },
       });
@@ -322,6 +324,15 @@ function ConfirmPage({ file, fileText, onSuccess }: ConfirmPageProps) {
             id="due-date"
             name="dueDate"
           />
+          <label className="mt-3 flex items-center gap-2 text-primary-light-grey font-semibold">
+            <input
+              className="h-4 w-4 accent-accent"
+              type="checkbox"
+              checked={isDiscoverable}
+              onChange={(e) => setIsDiscoverable(e.target.checked)}
+            />
+            Discoverable deck
+          </label>
           {errorMessage ? (
             <div className="mt-2 text-sm text-danger-red">{errorMessage}</div>
           ) : null}
@@ -382,6 +393,7 @@ function ManualTab({ modalNavState, onSuccess }: ManualTabProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [isDiscoverable, setIsDiscoverable] = useState(false);
   const [cards, setCards] = useState([{ question: "", answer: "" }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -434,6 +446,7 @@ function ManualTab({ modalNavState, onSuccess }: ManualTabProps) {
           name: trimmedName,
           description: description.trim() || "",
           dueDate: dueDate ? `${dueDate}T00:00:00` : null,
+          discoverable: isDiscoverable,
           cards: cleanedCards as CardCreate[],
         } as DeckCreate,
       });
@@ -501,6 +514,15 @@ function ManualTab({ modalNavState, onSuccess }: ManualTabProps) {
               onChange={(e) => setDueDate(e.target.value)}
             />
           </div>
+          <label className="mt-1 flex items-center gap-2 text-primary-light-grey font-semibold">
+            <input
+              className="h-4 w-4 accent-accent"
+              type="checkbox"
+              checked={isDiscoverable}
+              onChange={(e) => setIsDiscoverable(e.target.checked)}
+            />
+            Discoverable deck
+          </label>
 
           <div className="mt-2 font-semibold text-primary-light-grey">
             Cards

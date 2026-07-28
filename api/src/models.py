@@ -20,6 +20,7 @@ class Deck(Base):
   description: Mapped[str]
   due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
+  discoverable: Mapped[bool] = mapped_column(default=False)
   cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
   study_session: Mapped[Optional["StudySession"]] = relationship(init=False)
 
@@ -69,12 +70,16 @@ class APISchema(BaseModel):
 
 class DeckListResponse(APISchema):
   id: int
+  creator_user_id: str
+  creator_username: str | None
+  creator_display_name: str
   name: str
   description: str | None
   due_date: datetime | None
   mastery: int
   cards_due_today: int
   next_review_date: datetime | None
+  discoverable: bool
   total_cards: int
   last_studied_at: datetime | None
   active_study_session: bool
@@ -90,15 +95,18 @@ class DeckCreate(APISchema):
   last_studied_at: datetime | None = None
   mastery: int = 0
   cards: list[CardCreate] = Field(min_length=1)
+  discoverable: bool = False
 
 class DeckCreateResponse(APISchema):
   id: int
   name: str
   description: str
+  discoverable: bool
 
 class DeckUpdate(APISchema):
   name: str
   description: str
+  discoverable: bool
   due_date: datetime | None
   cards: list["CardDeckUpdate"] = Field(min_length=1)
 
@@ -111,12 +119,17 @@ class DeckUpdateResponse(APISchema):
   id: int
   name: str
   description: str
+  discoverable: bool
   due_date: datetime | None
 
 class DeckGetResponse(APISchema):
   id: int
+  creator_user_id: str
+  creator_username: str | None
+  creator_display_name: str
   name: str
   description: str
+  discoverable: bool
   due_date: datetime | None
   cards: list["CardDeckGetResponse"]
   mastery: int

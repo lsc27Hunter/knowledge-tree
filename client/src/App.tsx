@@ -3,6 +3,7 @@ import LandingPage from "./pages/Landing";
 import DashboardPage from "./pages/Dashboard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import StudyPage from "./pages/Study";
+import DiscoveryPage from "./pages/DiscoveryPage";
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/study/:deckId" element={<StudyPage />} />
+          <Route path="/discovery" element={<DiscoveryPage />} />
         </Route>
       </Routes>
     </div>
