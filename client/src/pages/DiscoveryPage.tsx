@@ -1,8 +1,9 @@
 import { UserButton, useUser } from "@clerk/react";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getDiscoverableDecks, type DeckListResponse } from "../api";
+import { toast } from "sonner";
 
 import { Navbar } from "../components/ui/Navbar";
 import {
@@ -10,6 +11,7 @@ import {
   type Deck as DashboardDeck,
 } from "../components/ui/DeckCard";
 import { Spinner } from "../components/ui/Spinner";
+import { PageShell } from "../components/ui/PageShell";
 
 function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
   return {
@@ -46,18 +48,14 @@ export default function DiscoveryPage() {
       if (result.error) {
         throw result.error;
       }
-      const currentUserId = user?.id;
-      setDecks(
-        (result.data ?? [])
-          .map(toDashboardDeck)
-          .filter((deck) => deck.creatorUserId !== currentUserId),
-      );
+      setDecks((result.data ?? []).map(toDashboardDeck));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to load decks.";
       setDecksError(message);
+      toast.error("Couldn't load discovery", { description: message });
     }
-  }, [isLoaded, user?.id]);
+  }, [isLoaded]);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -66,43 +64,82 @@ export default function DiscoveryPage() {
     void loadDecks();
   }, [isLoaded, loadDecks]);
 
+  const { mine, others } = useMemo(() => {
+    const currentUserId = user?.id;
+    const mine: DashboardDeck[] = [];
+    const others: DashboardDeck[] = [];
+    for (const deck of decks) {
+      if (currentUserId && deck.creatorUserId === currentUserId) {
+        mine.push(deck);
+      } else {
+        others.push(deck);
+      }
+    }
+    return { mine, others };
+  }, [decks, user?.id]);
+
   if (!isLoaded) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex min-h-[50vh] items-center justify-center py-8">
         <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="mb-4">
+    <div>
       <Navbar
-        version="Dashboard"
+        version="Discovery"
         userButton={<UserButton />}
         onDeckCreated={() => {
           void loadDecks();
         }}
       />
 
-      {decksError ? (
-        <div className="mx-15 mt-3 text-small text-danger-red">
-          {decksError}
-        </div>
-      ) : null}
+      <PageShell width="wide">
+        <h1 className="type-heading text-fg">Discover</h1>
+        <p className="type-body mt-2 max-w-2xl text-primary-light-grey">
+          Browse public decks from other learners. Preview cards, then add a
+          copy to your dashboard. Mark a deck public from Create/Edit to share
+          yours.
+        </p>
 
-      <div className="mx-4 mt-2 flex justify-center sm:mx-15 sm:justify-end"></div>
-      <div className="font-semibold text-2xl text-white mx-15 mt-15">
-        Discoverable Decks
-      </div>
-      <div className="mx-15 mt-2 text-small text-primary-light-grey">
-        Browse decks created by other users. Preview Cards and add them to your
-        own collection to study.
-      </div>
-      <div className="mx-15 mt-15 grid grid-cols-1 gap-15 md:grid-cols-2 xl:grid-cols-3">
-        {decks.map((deck) => (
-          <DeckCard key={deck.id} deckData={deck} isDiscoveryPage={true} />
-        ))}
-      </div>
+        {decksError ? (
+          <p className="type-caption mt-4 text-danger-red">{decksError}</p>
+        ) : null}
+
+        {mine.length > 0 ? (
+          <section className="mt-10">
+            <h2 className="type-title text-fg">Your Public Decks</h2>
+            <p className="type-caption mt-1 text-primary-light-grey">
+              These are live in Discover for everyone else. You manage them from
+              Decks.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {mine.map((deck) => (
+                <DeckCard key={deck.id} deckData={deck} isDiscoveryPage />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className={mine.length > 0 ? "mt-12" : "mt-10"}>
+          <h2 className="type-title text-fg">From Other Learners</h2>
+          {others.length === 0 && !decksError ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-border bg-primary-grey/50 px-6 py-12 text-center">
+              <p className="type-body text-primary-light-grey">
+                No shared decks from other users yet.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {others.map((deck) => (
+                <DeckCard key={deck.id} deckData={deck} isDiscoveryPage />
+              ))}
+            </div>
+          )}
+        </section>
+      </PageShell>
     </div>
   );
 }

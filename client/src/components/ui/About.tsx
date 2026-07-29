@@ -1,15 +1,19 @@
-export function About() {
+export function About({ centered = false }: { centered?: boolean }) {
   return (
-    <div className="font-inter ">
-      <div className="text-about-2 font-medium sm:text-about">
-        <div className="text-white">Study Smarter.</div>
-        <div className="text-accent">Merge Faster.</div>
-      </div>
-      <div className="font-inter text-regular sm:text-about-2 text-primary-light-grey">
-        Upload a study guide, let our algorithms auto-tag it and schedule your
-        review sessions — then seamlessly merge updated guides from classmates
-        without ever losing your personal learning progress.
-      </div>
+    <div className={`font-inter ${centered ? "mx-auto text-center" : ""}`}>
+      <h1 className="type-display text-fg">
+        Study Smarter.
+        <span className="mt-1 block text-accent">Merge Faster.</span>
+      </h1>
+      <p
+        className={`type-body-lg mt-5 text-primary-light-grey sm:mt-6 ${
+          centered ? "mx-auto max-w-2xl" : "max-w-3xl"
+        }`}
+      >
+        Upload a study guide, let our algorithms schedule your review sessions -
+        then seamlessly merge updated guides from classmates without ever losing
+        your personal learning progress.
+      </p>
     </div>
   );
 }
