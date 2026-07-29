@@ -1,6 +1,7 @@
 # Clerk JWT verification for protected API routes.
 
 import json
+from functools import lru_cache
 from typing import Annotated, Any
 
 import httpx
@@ -73,6 +74,16 @@ def _decode_clerk_token(token: str, host: str | None) -> dict[str, Any]:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
   return payload
+
+@lru_cache(maxsize=256)
+def get_clerk_user_profile(user_id: str) -> dict[str, Any]:
+  response = httpx.get(
+    f"https://api.clerk.com/v1/users/{user_id}",
+    headers={"Authorization": f"Bearer {clerk_secret_key}"},
+    timeout=10,
+  )
+  response.raise_for_status()
+  return response.json()
 
 def _unauthorized_party(azp: Any | None, host: str | None):
   # First check if the token matches an explicitly authorized party.
