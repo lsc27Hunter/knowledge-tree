@@ -2,7 +2,7 @@ import { UserButton, useUser } from "@clerk/react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getDecks, type DeckListResponse } from "../api";
+import { getDecks, getStreak, type DeckListResponse } from "../api";
 
 import { Navbar } from "../components/ui/Navbar";
 import {
@@ -36,8 +36,10 @@ export default function DashboardPage() {
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [decks, setDecks] = useState<DashboardDeck[]>([]);
   const [decksError, setDecksError] = useState<string | null>(null);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [streakError, setStreakError] = useState<string | null>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
-  console.log(decks);
+
   const sortingOptions = ["Next Review", "Due Date", "Mastery", "Last Studied"];
 
   const loadDecks = useCallback(async () => {
@@ -57,6 +59,26 @@ export default function DashboardPage() {
       const message =
         error instanceof Error ? error.message : "Failed to load decks.";
       setDecksError(message);
+    }
+  }, [isLoaded]);
+
+  const loadStreak = useCallback(async () => {
+    if (!isLoaded) {
+      return;
+    }
+
+    try {
+      setStreakError(null);
+      const result = await getStreak();
+
+      if (result.error) {
+        throw result.error;
+      }
+      setCurrentStreak(result.data?.currentStreak ?? 0);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load streak.";
+      setStreakError(message);
     }
   }, [isLoaded]);
 
@@ -84,7 +106,8 @@ export default function DashboardPage() {
       return;
     }
     void loadDecks();
-  }, [isLoaded, loadDecks]);
+    void loadStreak();
+  }, [isLoaded, loadDecks, loadStreak]);
 
   if (!isLoaded) {
     return (
@@ -100,7 +123,7 @@ export default function DashboardPage() {
     userEmail: user?.primaryEmailAddress?.emailAddress ?? "",
     userFirstName:
       user?.username?.split(" ")[0] ?? user?.firstName ?? "Learner",
-    currentStreak: 7, // to do: figure out how to calculate this from backend data
+    currentStreak,
   };
 
   const sortedDecks = [...decks].sort((a, b) => {
@@ -173,9 +196,9 @@ export default function DashboardPage() {
         <span aria-hidden="true">&bull;</span> {cardCount}{" "}
         {cardCount === 1 ? "card" : "cards"}
       </div>
-      {decksError ? (
+      {decksError || streakError ? (
         <div className="mx-15 mt-3 text-small text-danger-red">
-          {decksError}
+          {decksError ?? streakError}
         </div>
       ) : null}
       <div className="mt-10 ml-4 w-[calc(100%-2rem)] sm:ml-15 sm:w-7/10">

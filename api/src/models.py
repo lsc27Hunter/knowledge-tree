@@ -1,11 +1,11 @@
 # Database models and API schemas.
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -57,6 +57,19 @@ class StudySessionCard(Base):
   rating: Mapped[Optional[Literal["red", "yellow", "green"]]]
   card: Mapped["Card"] = relationship(back_populates="study_session_card", init=False)
   study_session: Mapped["StudySession"] = relationship(back_populates="cards", init=False)
+
+class UserStudyDay(Base):
+  __tablename__ = "user_study_day"
+  __table_args__ = (UniqueConstraint("user_id", "study_date"),)
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  user_id: Mapped[str]
+  study_date: Mapped[date]
+  reviews_count: Mapped[int] = mapped_column(default=0)
+  unique_cards_count: Mapped[int] = mapped_column(default=0)
+  qualifies_for_streak: Mapped[bool] = mapped_column(default=False)
+  first_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
+  last_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
 
 # Translates camelCase request fields to snake_case.
 # Translates snake_case response fields to camelCase.
@@ -207,3 +220,12 @@ class StudySessionCardResponse(APISchema):
 
 class CompleteStudySessionResponse(APISchema):
   success: bool
+
+
+class StreakResponse(APISchema):
+  current_streak: int
+  longest_streak: int
+  today_reviews_count: int
+  today_unique_cards_count: int
+  minimum_cards_per_day: int
+  qualifies_today: bool

@@ -3,12 +3,13 @@
 # https://fastapi.tiangolo.com/advanced/async-tests
 # https://sqlmodel.tiangolo.com/tutorial/fastapi/tests
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
@@ -19,7 +20,7 @@ os.environ["CLERK_SECRET_KEY"] = "test_clerk_secret_key"
 from auth import get_current_user_id
 from db import get_session
 from main import app
-from models import Base, Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate
+from models import Base, Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate, UserStudyDay
 
 user_id = "test_user_id"
 
@@ -337,6 +338,99 @@ async def test_study(session: AsyncSession, client: AsyncClient):
   assert data["mastery"] == 0
   assert data["oldMastery"] == 0
   assert data["cardsLeft"] == 1
+
+
+async def test_get_streak_defaults(client: AsyncClient):
+  response = await client.get("/api/me/streak")
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["currentStreak"] == 0
+  assert data["longestStreak"] == 0
+  assert data["todayReviewsCount"] == 0
+  assert data["todayUniqueCardsCount"] == 0
+  assert data["minimumCardsPerDay"] == 3
+  assert data["qualifiesToday"] == False
+
+
+async def test_review_card_updates_streak(session: AsyncSession, client: AsyncClient):
+  deck = Deck(
+    user_id=user_id,
+    name="test name",
+    description="test description",
+    last_studied_at=None,
+    due_date=datetime.now()
+  )
+  session.add(deck)
+  await session.commit()
+
+  for i in range(3):
+    session.add(Card(
+      deck_id=deck.id,
+      question=f"question{i}",
+      answer=f"answer{i}",
+    ))
+  await session.commit()
+
+  study_response = await client.post(f"/api/decks/{deck.id}/study")
+  study_data = study_response.json()
+  assert study_response.status_code == 200
+
+  for study_card in study_data["cards"]:
+    review_response = await client.post(
+      f"/api/cards/{study_card['id']}/review",
+      json={"rating": "green"},
+    )
+    assert review_response.status_code == 200
+
+  row_count = (await session.execute(select(UserStudyDay))).scalars().all()
+  assert len(row_count) == 1
+  assert row_count[0].reviews_count == 3
+  assert row_count[0].unique_cards_count == 3
+  assert row_count[0].qualifies_for_streak == True
+
+  streak_response = await client.get("/api/me/streak")
+  streak_data = streak_response.json()
+
+  assert streak_response.status_code == 200
+  assert streak_data["todayReviewsCount"] == 3
+  assert streak_data["todayUniqueCardsCount"] == 3
+  assert streak_data["qualifiesToday"] == True
+  assert streak_data["currentStreak"] == 1
+  assert streak_data["longestStreak"] == 1
+
+
+async def test_get_streak_counts_consecutive_qualifying_days(session: AsyncSession, client: AsyncClient):
+  today = datetime.utcnow().date()
+  yesterday = today - timedelta(days=1)
+
+  session.add_all([
+    UserStudyDay(
+      user_id=user_id,
+      study_date=today,
+      reviews_count=3,
+      unique_cards_count=3,
+      qualifies_for_streak=True,
+    ),
+    UserStudyDay(
+      user_id=user_id,
+      study_date=yesterday,
+      reviews_count=3,
+      unique_cards_count=3,
+      qualifies_for_streak=True,
+    ),
+  ])
+  await session.commit()
+
+  response = await client.get("/api/me/streak")
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["currentStreak"] == 2
+  assert data["longestStreak"] == 2
+  assert data["todayReviewsCount"] == 3
+  assert data["todayUniqueCardsCount"] == 3
+  assert data["qualifiesToday"] == True
 
 # Fixtures
 
