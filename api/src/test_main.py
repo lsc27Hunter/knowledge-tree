@@ -20,6 +20,7 @@ from auth import get_current_user_id
 from db import get_session
 from main import app
 from models import Base, Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate
+from notifications import check_notifications_secret
 
 user_id = "test_user_id"
 
@@ -382,8 +383,12 @@ async def client_fixture(session: AsyncSession):
   def get_current_user_id_override():
     return user_id
 
+  def check_notifications_secret_override():
+    return None
+
   app.dependency_overrides[get_session] = get_session_override
   app.dependency_overrides[get_current_user_id] = get_current_user_id_override
+  app.dependency_overrides[check_notifications_secret] = check_notifications_secret_override
   
   transport = ASGITransport(app=app)
   async with AsyncClient(transport=transport, base_url="http://test") as client:

@@ -20,6 +20,8 @@ if (!publishableKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in .env.local");
 }
 
+registerServiceWorker();
+
 function RootLayout() {
   const navigate = useNavigate();
 
@@ -52,3 +54,11 @@ createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+async function registerServiceWorker() {
+  if ("serviceWorker" in navigator && "PushManager" in window) {
+    await navigator.serviceWorker.register("./service-worker.js");
+  } else {
+    console.info("Your browser does not support notifications");
+  }
+}

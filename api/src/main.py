@@ -10,6 +10,8 @@ from sqlalchemy.orm import joinedload, selectinload
 from auth import CurrentUserId
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeckGetResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUpdate, DeckUpdateResponse, DeckUploadResponse
+from routers.notifications import router as notifications_router
+from routers.settings import router as settings_router
 from routers.study import router as study_router
 from utils.mastery import calculate_deck_mastery, card_mastery
 
@@ -29,6 +31,8 @@ app = FastAPI(
 )
 
 app.include_router(study_router)
+app.include_router(notifications_router)
+app.include_router(settings_router)
 
 
 @app.get("/")

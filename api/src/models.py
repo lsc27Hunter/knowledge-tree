@@ -1,11 +1,12 @@
 # Database models and API schemas.
+from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -56,6 +57,32 @@ class StudySessionCard(Base):
   rating: Mapped[Optional[Literal["red", "yellow", "green"]]]
   card: Mapped["Card"] = relationship(back_populates="study_session_card", init=False)
   study_session: Mapped["StudySession"] = relationship(back_populates="cards", init=False)
+
+class PushSubscription(Base):
+  __tablename__ = "push_subscription"
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  settings_id: Mapped[int] = mapped_column(ForeignKey("settings.id", ondelete="CASCADE"))
+  host: Mapped[str]
+  endpoint: Mapped[str]
+  keys_p256dh: Mapped[str]
+  keys_auth: Mapped[str]
+
+  __table_args__ = (UniqueConstraint('endpoint', 'keys_p256dh', 'keys_auth'),)
+
+class Settings(Base):
+  __tablename__ = "settings"
+
+  id: Mapped[int | None] = mapped_column(primary_key=True)
+  user_id: Mapped[str] = mapped_column(unique=True)
+  notification_time: Mapped[time]
+  deck_notification_condition_enabled: Mapped[bool]
+  deck_notification_condition_cards: Mapped[int]
+  deck_notification_condition_days: Mapped[int]
+  card_notification_condition_enabled: Mapped[bool]
+  card_notification_condition_days: Mapped[int]
+  streak_notification_condition_enabled: Mapped[bool]
+  streak_notification_condition_days: Mapped[int]
 
 # Translates camelCase request fields to snake_case.
 # Translates snake_case response fields to camelCase.
@@ -191,6 +218,114 @@ class StudySessionCardResponse(APISchema):
   answer: str
   rating: Literal["red", "yellow", "green"] | None
 
-
 class CompleteStudySessionResponse(APISchema):
   success: bool
+
+class SettingsGet(APISchema):
+  push_subscription: "PushSubscriptionData | None"
+
+class SettingsGetResponse(APISchema):
+  is_subscribed: bool
+  notification_time: time | None
+  notification_conditions: NotificationConditions
+
+class SendTestNotification(APISchema):
+  push_subscription: PushSubscriptionData
+  notification_conditions: NotificationConditionsDefaults
+
+class SettingsUpdate(APISchema):
+  notifications_enabled: bool
+  push_subscription: PushSubscriptionData | None
+  notification_time: time
+  notification_conditions: NotificationConditionsDefaults
+
+class SettingsUpdateResponse(APISchema):
+  push_subscription_result: Literal["enabled", "deleted", "nothing to delete"]
+
+class DeckNotificationCondition(APISchema):
+  enabled: bool
+  cards: int
+  days: int
+
+  @staticmethod
+  def from_settings(settings: Settings) -> DeckNotificationCondition:
+    return DeckNotificationCondition(
+      enabled=settings.deck_notification_condition_enabled,
+      days=settings.deck_notification_condition_days,
+      cards=settings.deck_notification_condition_cards,
+    )
+
+class DeckNotificationConditionDefaults(DeckNotificationCondition):
+  enabled: bool = True
+  cards: int = 10
+  days: int = 1
+
+class CardNotificationCondition(APISchema):
+  enabled: bool
+  days: int
+
+  @staticmethod
+  def from_settings(settings: Settings) -> CardNotificationCondition:
+    return CardNotificationCondition(
+      enabled=settings.card_notification_condition_enabled,
+      days=settings.card_notification_condition_days,
+    )
+
+class CardNotificationConditionDefaults(CardNotificationCondition):
+  enabled: bool = True
+  days: int = 3
+
+class StreakNotificationCondition(APISchema):
+  enabled: bool
+  days: int
+
+  @staticmethod
+  def from_settings(settings: Settings) -> StreakNotificationCondition:
+    return StreakNotificationCondition(
+      enabled=settings.streak_notification_condition_enabled,
+      days=settings.streak_notification_condition_days,
+    )
+
+class StreakNotificationConditionDefaults(StreakNotificationCondition):
+  enabled: bool = True
+  days: int = 3
+
+class NotificationConditions(APISchema):
+  deck: DeckNotificationCondition
+  card: CardNotificationCondition
+  streak: StreakNotificationCondition
+
+  @staticmethod
+  def from_settings(settings: Settings) -> NotificationConditions:
+    return NotificationConditions(
+      deck=DeckNotificationCondition.from_settings(settings),
+      card=CardNotificationCondition.from_settings(settings),
+      streak=StreakNotificationCondition.from_settings(settings),
+    )
+
+class NotificationConditionsDefaults(NotificationConditions):
+  deck: DeckNotificationCondition = DeckNotificationConditionDefaults()
+  card: CardNotificationCondition = CardNotificationConditionDefaults()
+  streak: StreakNotificationCondition = StreakNotificationConditionDefaults()
+
+class PushSubscriptionData(APISchema):
+  endpoint: str
+  keys: PushSubscriptionKeys
+
+  @staticmethod
+  def from_db(x: PushSubscription) -> PushSubscriptionData:
+    return PushSubscriptionData(
+      endpoint=x.endpoint,
+      keys=PushSubscriptionKeys(
+        p256dh=x.keys_p256dh,
+        auth=x.keys_auth,
+      ),
+    )
+
+class PushSubscriptionKeys(APISchema):
+  p256dh: str = Field(alias="p256dh")
+  auth: str
+
+class SendNotificationsResponse(APISchema):
+  sent: int
+  expired_or_invalid: int
