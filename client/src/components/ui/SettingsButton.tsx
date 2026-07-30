@@ -1,28 +1,68 @@
+import { toast } from "sonner";
 import { useEffect, useState, type ChangeEventHandler, type ReactNode, type SubmitEventHandler } from "react";
-import Gear from "../../assets/gear.svg";
-import { ModalHeaderMain, ModalHeaderShell, ModalShell, useModalState, type ModalState } from "./Modal";
 import { sendTestNotification, updateSettings, getSettings } from "../../api";
 
-export default function SettingsButton() {
+import Gear from "../../assets/gear.svg";
+import { focusRing, hoverSurface, interactive } from "../../lib/interaction";
+import { useTheme } from "../../theme/ThemeProvider";
+import { IconButton } from "./IconButton";
+import {
+  ModalBody,
+  ModalHeaderMain,
+  ModalHeaderShell,
+  ModalShell,
+  useModalState,
+  type ModalState,
+} from "./Modal";
+import { fieldInputClass, FieldLabel } from "./DeckFormFields";
+
+export default function SettingsButton({
+  variant = "icon",
+  onOpen,
+}: {
+  variant?: "icon" | "row";
+  onOpen?: () => void;
+}) {
   const modalState = useModalState();
+
+  function open() {
+    onOpen?.();
+    modalState.open();
+  }
+
   return (
     <>
-      <button className="cursor-pointer" onClick={modalState.open}>
-        <img src={Gear} alt="settings" />
-      </button>
-      <Modal modalState={modalState} />
+      {variant === "row" ? (
+        <button
+          type="button"
+          className={`${interactive} ${focusRing} flex min-h-11 w-full items-center gap-3 rounded-lg px-3 type-body font-medium text-fg hover:bg-primary-grey/70`}
+          onClick={open}
+        >
+          <img src={Gear} alt="" className="theme-icon h-5 w-5" />
+          Settings
+        </button>
+      ) : (
+        <IconButton
+          icon={Gear}
+          ariaLabel="Open settings"
+          onClick={open}
+        />
+      )}
+      <SettingsModal modalState={modalState} />
     </>
   );
 }
 
-interface ModalProps {
-  modalState: ModalState;
-}
-
-function Modal({ modalState }: ModalProps) {
+function SettingsModal({ modalState }: { modalState: ModalState }) {
   return (
-    <ModalShell state={modalState}>
-      <ModalContent />
+    <ModalShell state={modalState} size="sm">
+      <ModalHeaderShell>
+        <ModalHeaderMain>Settings</ModalHeaderMain>
+      </ModalHeaderShell>
+      <ModalBody className="flex flex-col gap-6">
+        <AppearanceSection />
+        <NotificationsSection />
+      </ModalBody>
     </ModalShell>
   );
 }
@@ -43,7 +83,140 @@ function localFromUtc(utc: string) {
   return date.getHours().toString().padStart(2, "0") + ":" + date.getMinutes().toString().padStart(2, "0");
 }
 
-function ModalContent() {
+interface NotificationsState {
+  checked: boolean;
+  denied: boolean;
+  requestChange(checked: boolean): void;
+}
+
+type NotificationsStatus = "checked" | "unchecked" | "denied";
+
+function useNotificationsState(isSubscribedOnServer: boolean): NotificationsState {
+  const [status, setStatus] = useState<NotificationsStatus>("unchecked");
+  useEffect(() => {
+    if (isSubscribedOnServer) {
+      setStatus(Notification.permission === "granted" ? "checked" : "unchecked");
+    } else {
+      setStatus("unchecked");
+    }
+  }, [isSubscribedOnServer]);
+  async function requestChange(checked: boolean) {
+    if (checked) {
+      try {
+        if (Notification.permission === "granted") {
+          setStatus("checked");
+          return;
+        }
+
+        const res = await Notification.requestPermission();
+        if (res === "granted") {
+          setStatus("checked");
+          await subscribe();
+          toast.success("Notifications permitted");
+        } else {
+          setStatus("denied");
+          toast.error("Notifications blocked", {
+            description: "You can change this in your browser settings.",
+          });
+        }
+      } catch {
+        toast.error("Couldn't update notification permission");
+      }
+    } else {
+      setStatus("unchecked")
+      await unsubscribe();
+    }
+  };
+  return {
+    checked: status === "checked",
+    denied: status === "denied",
+    requestChange,
+  };
+}
+
+// function Notifications({ state, validateNotificationConditions }: NotificationsProps) {
+//   return (
+//     <div className="font-inter flex flex-col">
+//       {areNotificationsSupported() ?
+//         <div className="flex flex-col w-full">
+//           <div className="flex items-baseline mt-4">
+//           <div className="flex items-center text-white gap-x-3">
+//             <div>Notifications</div>
+//             <NotificationsCheckbox state={state} />
+//           </div>
+//           <TestNotificationsButton className="ml-6" disabled={!state.checked} validateNotificationConditions={validateNotificationConditions} />
+//           </div>
+//           {state.denied && <div className="text-gray-500">Permission was not granted. You may need to grant permission through your browser.</div>}
+//         </div> :
+//         <div className="font-bold mt-4">Your browser does not support notifications.</div>
+//       }
+//     </div>
+//   );
+// }
+
+function AppearanceSection() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="type-title text-fg">Appearance</h3>
+      <p className="type-caption text-primary-light-grey">
+        Choose how KnowledgeTree looks on this device.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <ThemeChoice
+          label="Dark"
+          selected={theme === "dark"}
+          onSelect={() => setTheme("dark")}
+        />
+        <ThemeChoice
+          label="Light"
+          selected={theme === "light"}
+          onSelect={() => setTheme("light")}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ThemeChoice({
+  label,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`${interactive} ${focusRing} rounded-xl border px-3 py-3 type-body font-medium ${
+        selected
+          ? "border-accent bg-accent/10 text-fg ring-1 ring-accent"
+          : `border-border bg-primary-grey text-primary-light-grey ${hoverSurface}`
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function NotificationsSection() {
+  return (
+    <section className="flex flex-col gap-3 border-t border-border pt-5">
+      <h3 className="type-title text-fg">Notifications</h3>
+      <p className="type-caption text-primary-light-grey">
+        Optional browser reminders for review sessions.
+      </p>
+      <NotificationsForm />
+    </section>
+  );
+}
+
+function NotificationsForm() {
   const [isSubscribedOnServer, setIsSubscribedOnServer] = useState(false);
   const notificationsState = useNotificationsState(isSubscribedOnServer);
   const [notificationTime, setNotificationTime] = useState("09:00");
@@ -137,33 +310,47 @@ function ModalContent() {
       },
     });
     setIsSaving(false);
+    toast.success("Settings saved");
   };
+
   return (
-    <div className="w-140 max-w-full">
-      <Header />
-      <form className={`relative px-8 pt-4 pb-6 font-inter max-h-[75vh] overflow-y-auto flex flex-col ${isLoading ? "invisible" : ""}`} onSubmit={onSubmit}>
-        {isLoading && <div className="absolute inset-0 w-full h-full flex items-center justify-center z-1 visible">
-          Loading...
-        </div>}
-        <h3 className="font-bold text-lg">Notifications</h3>
-        <Notifications state={notificationsState} validateNotificationConditions={validateNotificationConditions} />
-        <div className={!notificationsState.checked || !areNotificationsSupported() ? "opacity-55" : ""}>
-          <div className="flex mt-6 items-end">
-            <div>Schedule notifications for:</div>
-            <input className="border border-primary-light-grey rounded scheme-dark ml-3 px-1" type="time" value={notificationTime} onChange={onChangeTime} />
-          </div>
-          <div className="mt-6">Receive notifications for:</div>
-          <DeckNotificationCondition className="ml-3 mt-2" enabled={deckConditionEnabled} cards={deckConditionCards} days={deckConditionDays} setEnabled={setDeckConditionEnabled} setCards={setDeckConditionCards} setDays={setDeckConditionDays} />
-          <CardNotificationCondition className="ml-3 mt-2" enabled={cardConditionEnabled} days={cardConditionDays} setEnabled={setCardConditionEnabled} setDays={setCardConditionDays} />
-          <StreakNotificationCondition className="ml-3 mt-2" enabled={streakConditionEnabled} days={streakConditionDays} setEnabled={setStreakConditionEnabled} setDays={setStreakConditionDays} />
-          {fieldMissing && <div className="text-danger-red mt-4">A field is missing.</div>}
+    <form className={`relative font-inter flex flex-col ${isLoading ? "invisible" : ""}`} onSubmit={onSubmit}>
+      {isLoading && <div className="absolute inset-0 w-full h-full flex items-center justify-center z-1 visible">Loading...</div>}
+      <Notifications state={notificationsState} validateNotificationConditions={validateNotificationConditions} />
+      <div className={!notificationsState.checked || !areNotificationsSupported() ? "opacity-55" : ""}>
+        <div className="mt-6">
+          <FieldLabel htmlFor="notification-time">Scheduled Time</FieldLabel>
+          <input
+            id="notification-time"
+            type="time"
+            className={`${fieldInputClass} max-w-48 scheme-light-dark`}
+            value={notificationTime}
+            onChange={onChangeTime}
+          />
         </div>
-        <button className="self-end bg-accent text-white rounded-lg px-4 py-1 mt-8 cursor-pointer">
-          {isSaving ? "Saving..." : "Save"}
-        </button>
-      </form>
-    </div>
+        <div className="mt-8">
+          <FieldLabel>Receive notifications for:</FieldLabel>
+        </div>
+        <DeckNotificationCondition className="ml-3 mt-1" enabled={deckConditionEnabled} cards={deckConditionCards} days={deckConditionDays} setEnabled={setDeckConditionEnabled} setCards={setDeckConditionCards} setDays={setDeckConditionDays} />
+        <CardNotificationCondition className="ml-3 mt-1" enabled={cardConditionEnabled} days={cardConditionDays} setEnabled={setCardConditionEnabled} setDays={setCardConditionDays} />
+        <StreakNotificationCondition className="ml-3 mt-1" enabled={streakConditionEnabled} days={streakConditionDays} setEnabled={setStreakConditionEnabled} setDays={setStreakConditionDays} />
+        {fieldMissing && <div className="text-danger-red mt-4">A field is missing.</div>}
+      </div>
+      <button className="self-end bg-accent text-white rounded-lg px-4 py-1 mt-8 cursor-pointer">
+        {isSaving ? "Saving..." : "Save"}
+      </button>
+    </form>
   );
+}
+
+interface DeckNotificationConditionProps {
+  className?: string;
+  enabled: boolean;
+  cards: string;
+  days: string;
+  setEnabled(enabled: boolean): void;
+  setCards(cards: string): void;
+  setDays(days: string): void;
 }
 
 interface DeckNotificationConditionProps {
@@ -182,7 +369,7 @@ function DeckNotificationCondition({ className = "", enabled, cards, days, setEn
   const dayOrDays = parseInt(days) === 1 ? "day" : "days";
 
   return (
-    <NotificationConditionShell className={className} enabled={enabled} setEnabled={setEnabled}>
+    <NotificationConditionShell id="deck-notification-condition" className={className} enabled={enabled} setEnabled={setEnabled}>
       A deck with <NumberInput value={cards} setValue={setCards} /> {cardOrCards} that {hasOrHave} been due for <NumberInput value={days} setValue={setDays} /> {dayOrDays}
     </NotificationConditionShell>
   );
@@ -200,7 +387,7 @@ function CardNotificationCondition({ className = "", enabled, days, setEnabled, 
   const dayOrDays = parseInt(days) === 1 ? "day" : "days";
 
   return (
-    <NotificationConditionShell className={className} enabled={enabled} setEnabled={setEnabled}>
+    <NotificationConditionShell id="card-notification-condition" className={className} enabled={enabled} setEnabled={setEnabled}>
       A card that has been due for <NumberInput value={days} setValue={setDays} /> {dayOrDays}
     </NotificationConditionShell>
   );
@@ -218,7 +405,7 @@ function StreakNotificationCondition({ className = "", enabled, days, setEnabled
   const dayOrDays = parseInt(days) === 1 ? "day" : "days";
 
   return (
-    <NotificationConditionShell className={className} enabled={enabled} setEnabled={setEnabled}>
+    <NotificationConditionShell id="streak-notification-condition" className={className} enabled={enabled} setEnabled={setEnabled}>
       A streak of <NumberInput value={days} setValue={setDays} /> {dayOrDays}
     </NotificationConditionShell>
   );
@@ -226,20 +413,21 @@ function StreakNotificationCondition({ className = "", enabled, days, setEnabled
 
 interface NotificationConditionShellProps {
   className?: string;
+  id: string;
   children: ReactNode;
   enabled: boolean;
   setEnabled(enabled: boolean): void;
 }
 
-function NotificationConditionShell({ className = "", children, enabled, setEnabled }: NotificationConditionShellProps) {
+function NotificationConditionShell({ className = "", id, children, enabled, setEnabled }: NotificationConditionShellProps) {
   const onCheckboxChange: ChangeEventHandler<HTMLInputElement, HTMLInputElement> = e => {
     setEnabled(e.target.checked);
   };
   return (
-    <div className={`${className} flex items-start`}>
-      <input className="w-4 h-4 shrink-0 mt-1" type="checkbox" checked={enabled} onChange={onCheckboxChange} />
-      <div className={`ml-3 ${enabled ? "" : "text-gray-400"}`}>{children}</div>
-    </div>
+    <label htmlFor={id} className={`${className} flex cursor-pointer items-start gap-2 type-caption font-medium text-primary-light-grey`}>
+      <input id={id} className="w-4 h-4 shrink-0 mt-1 accent-accent" type="checkbox" checked={enabled} onChange={onCheckboxChange} />
+      <div className={`mt-[0.1rem] ${enabled ? "" : "opacity-70"}`}>{children}</div>
+    </label>
   );
 }
 
@@ -257,60 +445,13 @@ function NumberInput({ value, setValue }: NumberInputProps) {
   );
 }
 
-function Header() {
-  return (
-    <ModalHeaderShell>
-      <ModalHeaderMain>Settings</ModalHeaderMain>
-    </ModalHeaderShell>
-  );
-}
-
-interface NotificationsState {
-  checked: boolean;
-  denied: boolean;
-  requestChange: ChangeEventHandler<HTMLInputElement, HTMLInputElement>;
-}
-
-type NotificationsStatus = "checked" | "unchecked" | "denied";
-
-function useNotificationsState(isSubscribedOnServer: boolean): NotificationsState {
-  const [status, setStatus] = useState<NotificationsStatus>("unchecked");
-  useEffect(() => {
-    if (isSubscribedOnServer) {
-      setStatus(Notification.permission === "granted" ? "checked" : "unchecked");
-    } else {
-      setStatus("unchecked");
-    }
-  }, [isSubscribedOnServer]);
-  const requestChange: ChangeEventHandler<HTMLInputElement, HTMLInputElement> = async e => {
-    if (e.target.checked) {
-      const res = await Notification.requestPermission();
-      if (res === "granted") {
-        setStatus("checked");
-        await subscribe();
-      } else {
-        setStatus("denied");
-      }
-    } else {
-      setStatus("unchecked")
-      await unsubscribe();
-    }
-  };
-  return {
-    checked: status === "checked",
-    denied: status === "denied",
-    requestChange,
-  };
-}
-
 interface NotificationsCheckboxProps {
-  className?: string;
   state: NotificationsState;
 }
 
-function NotificationsCheckbox({ className = "", state }: NotificationsCheckboxProps) {
+function NotificationsCheckbox({ state }: NotificationsCheckboxProps) {
   return (
-    <input className={`${className} w-4 h-4`} type="checkbox" checked={state.checked} onChange={state.requestChange} />
+    <Toggle checked={state.checked} onChange={state.requestChange} id="notifications" />
   );
 }
 
@@ -324,18 +465,43 @@ function Notifications({ state, validateNotificationConditions }: NotificationsP
     <div className="font-inter flex flex-col">
       {areNotificationsSupported() ?
         <div className="flex flex-col w-full">
-          <div className="flex items-baseline mt-4">
-          <div className="flex items-center text-white gap-x-3">
-            <div>Notifications</div>
-            <NotificationsCheckbox state={state} />
+          <div className="flex items-center mt-4">
+            <div className="flex items-center text-white gap-x-3">
+              <NotificationsCheckbox state={state} />
+            </div>
+            <TestNotificationsButton className="ml-6" disabled={!state.checked} validateNotificationConditions={validateNotificationConditions} />
           </div>
-          <TestNotificationsButton className="ml-6" disabled={!state.checked} validateNotificationConditions={validateNotificationConditions} />
-          </div>
-          {state.denied && <div className="text-gray-500">Permission was not granted. You may need to grant permission through your browser.</div>}
+          {state.denied && <p className="type-caption text-danger-red mt-2">Permission was denied. Enable it in your browser settings if you want reminders.</p>}
         </div> :
-        <div className="font-bold mt-4">Your browser does not support notifications.</div>
+        <div>Your browser does not support notifications.</div>
       }
     </div>
+  );
+}
+
+export function Toggle({
+  checked,
+  onChange,
+  id,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  id?: string;
+}) {
+  return (
+    <label
+      htmlFor={id}
+      className="flex min-h-11 cursor-pointer items-center gap-2 type-caption font-semibold text-primary-light-grey"
+    >
+      <input
+        id={id}
+        type="checkbox"
+        className="h-5 w-5 accent-accent"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      Notifications
+    </label>
   );
 }
 

@@ -13,20 +13,42 @@ from models import Card, CardCreate, CardCreateResponse, CardDeckGetResponse, Ca
 from routers.notifications import router as notifications_router
 from routers.settings import router as settings_router
 from routers.study import router as study_router
+from routers.decks import router as decks_router
 from utils.mastery import calculate_deck_mastery, card_mastery
 
 
 def _creator_metadata(user_id: str) -> dict[str, str | None]:
-  profile = get_clerk_user_profile(user_id)
+  # Fall back if Clerk is down so deck list/detail still work.
+  try:
+    profile = get_clerk_user_profile(user_id)
+  except Exception:
+    return {
+      "creator_user_id": user_id,
+      "creator_username": None,
+      "creator_display_name": user_id,
+    }
+
   username = profile.get("username")
   first_name = profile.get("first_name")
   last_name = profile.get("last_name")
-  display_name = username or " ".join(part for part in [first_name, last_name] if part).strip() or user_id
+  display_name = (
+    username
+    or " ".join(part for part in [first_name, last_name] if part).strip()
+    or user_id
+  )
   return {
     "creator_user_id": user_id,
     "creator_username": username,
     "creator_display_name": display_name,
   }
+
+
+def _parse_form_bool(value: str | bool) -> bool:
+  # Multipart forms often send "true"/"false" as strings.
+  if isinstance(value, bool):
+    return value
+  normalized = value.strip().lower()
+  return normalized in {"1", "true", "on", "yes"}
 
 # For generating openapi.json.
 # https://fastapi.tiangolo.com/advanced/generate-clients/#custom-generate-unique-id-function
@@ -46,6 +68,7 @@ app = FastAPI(
 app.include_router(study_router)
 app.include_router(notifications_router)
 app.include_router(settings_router)
+app.include_router(decks_router)
 
 
 @app.get("/")
@@ -304,13 +327,14 @@ async def upload_deck(
   user_id: CurrentUserId,
   due_date: Annotated[str | None, Form(alias="dueDate")] = None,
   description: Annotated[str, Form()] = "",
-  discoverable: Annotated[bool, Form()] = False,
+  discoverable: Annotated[str, Form()] = "false",
 ):
   parsed_due_date = (
     datetime.fromisoformat(due_date)
     if due_date
     else None
   )
+  is_discoverable = _parse_form_bool(discoverable)
 
   db_deck = Deck(
     user_id=user_id,
@@ -318,7 +342,7 @@ async def upload_deck(
     description=description,
     last_studied_at=None,
     due_date=parsed_due_date,
-    discoverable=discoverable,
+    discoverable=is_discoverable,
   )
 
   session.add(db_deck)

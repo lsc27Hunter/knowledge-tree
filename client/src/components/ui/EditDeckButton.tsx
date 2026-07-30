@@ -1,8 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { Button } from "./Button";
-import EditIcon from "../../assets/edit.svg";
+import { toast } from "sonner";
+
 import { getDeck, updateDeck, type CardDeckUpdate } from "../../api";
+import EditIcon from "../../assets/edit.svg";
+import { Button } from "./Button";
 import {
+  CardEditorList,
+  DiscoverableToggle,
+  FieldLabel,
+  fieldInputClass,
+} from "./DeckFormFields";
+import { IconButton } from "./IconButton";
+import {
+  ModalBody,
+  ModalFooter,
   ModalHeaderMain,
   ModalHeaderShell,
   ModalShell,
@@ -12,52 +23,64 @@ import {
 
 interface EditDeckButtonProps {
   deckId: number;
+  onSaved?: () => void;
 }
 
-export default function EditDeckButton({ deckId }: EditDeckButtonProps) {
+export default function EditDeckButton({ deckId, onSaved }: EditDeckButtonProps) {
   const modalState = useModalState();
   return (
     <>
-      <Button
-        text=""
-        width="fit"
-        color="primary-grey"
-        textColor="white"
-        onClick={modalState.open}
+      <IconButton
         icon={EditIcon}
-        iconPosition="right"
-        iconSize="w-6 h-6"
+        ariaLabel="Edit Deck"
+        onClick={modalState.open}
       />
-      <Modal deckId={deckId} modalState={modalState} />
+      <EditDeckModal
+        deckId={deckId}
+        modalState={modalState}
+        onSaved={onSaved}
+      />
     </>
   );
 }
 
-interface ModalProps {
+function EditDeckModal({
+  deckId,
+  modalState,
+  onSaved,
+}: {
   deckId: number;
   modalState: ModalState;
-}
-
-function Modal({ deckId, modalState }: ModalProps) {
+  onSaved?: () => void;
+}) {
   return (
-    <ModalShell state={modalState}>
-      <Form deckId={deckId} onSuccess={modalState.close} />
+    <ModalShell state={modalState} size="lg">
+      <Form
+        deckId={deckId}
+        onSuccess={() => {
+          onSaved?.();
+          modalState.close();
+        }}
+      />
     </ModalShell>
   );
 }
 
-interface FormProps {
+function Form({
+  deckId,
+  onSuccess,
+}: {
   deckId: number;
   onSuccess(): void;
-}
-
-function Form({ deckId, onSuccess }: FormProps) {
+}) {
   const [initialName, setInitialName] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [isDiscoverable, setIsDiscoverable] = useState(false);
-  const [cards, setCards] = useState<CardDeckUpdate[]>([blankCard()]);
+  const [cards, setCards] = useState<CardDeckUpdate[]>([
+    { id: null, question: "", answer: "" },
+  ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -73,32 +96,6 @@ function Form({ deckId, onSuccess }: FormProps) {
       }
     });
   }, [deckId]);
-
-  function addCard() {
-    setCards((prev) => [...prev, blankCard()]);
-  }
-
-  function updateCard(
-    index: number,
-    field: "question" | "answer",
-    value: string,
-  ) {
-    setCards((prev) =>
-      prev.map((card, i) => (i === index ? { ...card, [field]: value } : card)),
-    );
-  }
-
-  function removeCard(index: number) {
-    if (cards.length === 1) {
-      setCards(() => [blankCard()]);
-    } else {
-      setCards((prev) => prev.filter((_, i) => i !== index));
-    }
-  }
-
-  function blankCard() {
-    return { id: null, question: "", answer: "" };
-  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -129,10 +126,8 @@ function Form({ deckId, onSuccess }: FormProps) {
 
     setIsSubmitting(true);
     try {
-      await updateDeck({
-        path: {
-          deckId,
-        },
+      const result = await updateDeck({
+        path: { deckId },
         body: {
           name: trimmedName,
           description: description.trim() || "",
@@ -141,150 +136,109 @@ function Form({ deckId, onSuccess }: FormProps) {
           cards: cleanedCards,
         },
       });
+      if (result.error) throw result.error;
+      toast.success("Deck Updated", {
+        description: isDiscoverable
+          ? "Marked public — other users can find it in Discover."
+          : undefined,
+      });
       onSuccess();
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Failed to update deck.",
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to update deck.";
+      setErrorMessage(message);
+      toast.error("Couldn't Update Deck", { description: message });
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  const inputClass =
-    "px-3 py-2 text-white bg-primary-grey border border-primary-light-grey rounded";
-
-  return (
-    <div className="relative w-200 max-w-full">
-      <Header initialDeckName={initialName} />
-      <div className="px-8 pt-4 pb-8 font-inter max-h-[75vh] overflow-y-auto">
-        <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-          <div className="flex gap-3">
-            <div className="flex flex-col">
-              <label
-                className="font-semibold text-primary-light-grey"
-                htmlFor="manual-deck-name"
-              >
-                Deck name
-              </label>
-              <input
-                className={inputClass}
-                id="manual-deck-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col">
-              <label
-                className="font-semibold text-primary-light-grey"
-                htmlFor="manual-description"
-              >
-                Description (Optional)
-              </label>
-              <input
-                className={inputClass}
-                id="manual-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex flex-col">
-            <label
-              className="font-semibold text-primary-light-grey"
-              htmlFor="manual-due-date"
-            >
-              Due Date (Optional)
-            </label>
-            <input
-              className={`${inputClass} w-40 scheme-dark`}
-              type="date"
-              id="manual-due-date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
-          <label className="mt-1 flex items-center gap-2 text-primary-light-grey font-semibold">
-            <input
-              className="h-4 w-4 accent-accent"
-              type="checkbox"
-              checked={isDiscoverable}
-              onChange={(e) => setIsDiscoverable(e.target.checked)}
-            />
-            Discoverable deck
-          </label>
-
-          <div className="mt-2 font-semibold text-primary-light-grey">
-            Cards
-          </div>
-          <div className="flex flex-col gap-3">
-            {cards.map((card, i) => (
-              <div
-                key={i}
-                className="bg-primary-grey border border-primary-light-grey rounded"
-              >
-                <div className="border-b border-primary-light-grey p-3 flex items-center gap-2">
-                  <span className="text-primary-light-grey w-4">Q</span>
-                  <input
-                    className="flex-1 bg-transparent text-white outline-none"
-                    placeholder="Question"
-                    value={card.question}
-                    onChange={(e) => updateCard(i, "question", e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="text-primary-light-grey hover:text-white ml-2 cursor-pointer"
-                    onClick={() => removeCard(i)}
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="p-3 flex items-start gap-2">
-                  <span className="text-success-green w-4">A</span>
-                  <textarea
-                    className="flex-1 bg-transparent text-white outline-none field-sizing-content"
-                    placeholder="Answer"
-                    value={card.answer}
-                    onChange={(e) => updateCard(i, "answer", e.target.value)}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="self-start text-accent font-semibold cursor-pointer mt-1"
-            onClick={addCard}
-          >
-            + Add card
-          </button>
-
-          {errorMessage && (
-            <div className="text-danger-red text-sm mt-1">{errorMessage}</div>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="cursor-pointer bg-accent px-4 py-2 rounded-lg self-end mt-2 disabled:opacity-50"
-          >
-            {isSubmitting
-              ? "Saving..."
-              : `Save Changes (${cards.length} card${cards.length !== 1 ? "s" : ""})`}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function Header({ initialDeckName }: { initialDeckName: string | null }) {
   const title =
-    "Edit" + (initialDeckName === null ? "" : ` '${initialDeckName}'`);
+    initialName === null ? "Edit Deck" : `Edit '${initialName}'`;
+
   return (
-    <ModalHeaderShell>
-      <ModalHeaderMain>{title}</ModalHeaderMain>
-    </ModalHeaderShell>
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmit}>
+      <ModalHeaderShell>
+        <ModalHeaderMain>{title}</ModalHeaderMain>
+        <p className="type-caption mt-1 text-primary-light-grey">
+          Update deck details and cards. Scheduling progress is kept when
+          answers change.
+        </p>
+      </ModalHeaderShell>
+      <ModalBody className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <FieldLabel htmlFor="edit-deck-name">Deck Name</FieldLabel>
+            <input
+              id="edit-deck-name"
+              className={fieldInputClass}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="edit-description">Description (Optional)</FieldLabel>
+            <input
+              id="edit-description"
+              className={fieldInputClass}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+        </div>
+        <div>
+          <FieldLabel htmlFor="edit-due-date">Due Date (Optional)</FieldLabel>
+          <input
+            id="edit-due-date"
+            type="date"
+            className={`${fieldInputClass} max-w-48 [color-scheme:light_dark]`}
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+          />
+        </div>
+        <DiscoverableToggle
+          id="edit-discoverable"
+          checked={isDiscoverable}
+          onChange={setIsDiscoverable}
+        />
+        <CardEditorList
+          cards={cards}
+          onChange={(i, field, value) =>
+            setCards((prev) =>
+              prev.map((card, idx) =>
+                idx === i ? { ...card, [field]: value } : card,
+              ),
+            )
+          }
+          onRemove={(i) =>
+            setCards((prev) =>
+              prev.length === 1
+                ? [{ id: null, question: "", answer: "" }]
+                : prev.filter((_, idx) => idx !== i),
+            )
+          }
+          onAdd={() =>
+            setCards((prev) => [...prev, { id: null, question: "", answer: "" }])
+          }
+        />
+        {errorMessage ? (
+          <p className="type-caption text-danger-red">{errorMessage}</p>
+        ) : null}
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          type="submit"
+          text={
+            isSubmitting
+              ? "Saving…"
+              : `Save Changes (${cards.length} Card${cards.length === 1 ? "" : "s"})`
+          }
+          width="fit"
+          color="accent"
+          textColor="white"
+          disabled={isSubmitting}
+        />
+      </ModalFooter>
+    </form>
   );
 }

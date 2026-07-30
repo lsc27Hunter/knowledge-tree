@@ -133,7 +133,7 @@ class DeckCreateResponse(APISchema):
 class DeckUpdate(APISchema):
   name: str
   description: str
-  discoverable: bool
+  discoverable: bool = False
   due_date: datetime | None
   cards: list["CardDeckUpdate"] = Field(min_length=1)
 
@@ -179,6 +179,30 @@ class DeckUploadResponse(APISchema):
   deck_id: int
   cards_created: int
   message: str
+
+class DeckMergeStats(APISchema):
+  added: int
+  updated: int
+  unchanged: int
+
+class DeckMergeResponse(APISchema):
+  message: str
+  stats: DeckMergeStats
+
+class DeckMergeChange(APISchema):
+  key: str
+  kind: Literal["added", "updated", "unchanged"]
+  question: str
+  old_answer: str | None = None
+  new_answer: str
+
+class DeckMergePreviewResponse(APISchema):
+  changes: list[DeckMergeChange]
+  stats: DeckMergeStats
+
+class DeckMergeApplyRequest(APISchema):
+  # Accepted add/update rows from the merge preview UI.
+  rows: list[CardCreate] = Field(min_length=1)
 
 class CardListResponse(APISchema):
   id: int
