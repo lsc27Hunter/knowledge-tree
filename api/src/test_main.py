@@ -15,6 +15,8 @@ from testcontainers.postgres import PostgresContainer
 # Override environment variables to prevent crashing when env is imported.
 os.environ["DATABASE_URL"] = "postgresql://"
 os.environ["CLERK_SECRET_KEY"] = "test_clerk_secret_key"
+os.environ["VAPID_PRIVATE_KEY"] = "test_vapid_private_key"
+os.environ["NOTIFICATIONS_SECRET"] = "test_notifications_secret"
 
 from auth import get_current_user_id
 from db import get_session
