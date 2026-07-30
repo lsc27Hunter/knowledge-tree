@@ -12,7 +12,7 @@ from jwt.algorithms import RSAAlgorithm
 
 from env import clerk_authorized_parties, clerk_secret_key
 
-_bearer = HTTPBearer(auto_error=False)
+_bearer = HTTPBearer(scheme_name="ClerkUser", auto_error=False)
 _jwks_keys: list[dict[str, Any]] | None = None
 
 

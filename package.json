@@ -5,7 +5,7 @@
   "scripts": {
     "client": "npm run dev --workspace=client",
     "api": "uv run --directory api fastapi dev src/main.py",
-    "gen-api-bindings": "uv run --directory api python src/openapi.py && npx --workspace=client openapi-ts",
+    "gen-api-bindings": "uv run --directory api python ../openapi.py && npx --workspace=client openapi-ts --no-log-file",
     "build": "npm run build --workspace=client"
   }
 }

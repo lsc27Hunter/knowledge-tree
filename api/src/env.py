@@ -21,5 +21,9 @@ clerk_secret_key = os.environ['CLERK_SECRET_KEY']
 _clerk_parties = os.getenv('CLERK_AUTHORIZED_PARTIES', 'http://localhost:5173')
 clerk_authorized_parties = [party.strip() for party in _clerk_parties.split(',') if party.strip()]
 
+# For web push notifications.
+vapid_private_key = os.environ['VAPID_PRIVATE_KEY']
+notifications_secret = os.environ['NOTIFICATIONS_SECRET']
+
 # Environment variable defined by Vercel.
 on_vercel = os.getenv('VERCEL') == '1'
