@@ -8,7 +8,6 @@ export function MasteryBar({ percentage }: MasteryBarProps) {
   const getColor = (percent: number): string => {
     if (percent >= 60) return "var(--color-success-green)";
     if (percent >= 40) return "var(--color-warning-yellow)";
-    if (percent >= 20) return "var(--color-danger-red)";
     return "var(--color-danger-red)";
   };
 
@@ -16,20 +15,20 @@ export function MasteryBar({ percentage }: MasteryBarProps) {
 
   return (
     <div>
-      <div className="text-xsmall text-primary-light-grey font-medium">
+      <div className="type-caption font-medium text-primary-light-grey">
         Mastery
       </div>
-      <div className="flex w-full items-center gap-2">
-        <div className="h-2 flex-1 rounded-full bg-gray-200 overflow-hidden">
+      <div className="mt-1 flex w-full items-center gap-2">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-border">
           <div
-            className="h-full rounded-full transition-all duration-300 ease-out "
+            className="h-full rounded-full transition-all duration-300 ease-out"
             style={{
               width: `${clampedPercentage}%`,
               backgroundColor: color,
             }}
           />
         </div>
-        <p className="min-w-10 text-right text-xs text-gray-600">
+        <p className="min-w-10 text-right text-xs text-fg-subtle">
           {clampedPercentage}%
         </p>
       </div>

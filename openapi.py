@@ -2,10 +2,13 @@
 
 import json
 from pathlib import Path
+import sys
 
-from main import app
+sys.path.append(str(Path(__file__).parent / "api" / "src"))
 
-out_dir = Path(__file__).parent.parent.parent / "client" / "src" / "api"
+from api.src.main import app
+
+out_dir = Path(__file__).parent / "client"
 out_dir.mkdir(parents=True, exist_ok=True)
 out = out_dir / "openapi.json"
 

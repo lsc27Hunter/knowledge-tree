@@ -32,7 +32,7 @@ function apiBindings(): Plugin {
     async buildStart() {
       let lastGenerated;
       try {
-        lastGenerated = (await fs.stat("src/api/openapi.json")).mtimeMs;
+        lastGenerated = (await fs.stat("openapi.json")).mtimeMs;
       } catch (e) {
         if (e !== null && typeof e === "object" && "code" in e && e.code === "ENOENT") {
           // File not found.
@@ -50,17 +50,29 @@ function apiBindings(): Plugin {
     },
     configureServer(server) {
       const watchDir = '../api/src';
-      const watcher = watch(watchDir, { ignoreInitial: true, ignored: [/(^|[\/\\])__pycache__([\/\\]|$)/] });
-      
+      const watcher = watch(watchDir, { ignoreInitial: true, ignored: [/(^|[\/\\])__pycache__([\/\\]|$)/],  });
+
+      let t1 = Date.now();
+      let queuedPaths = new Set();
       watcher.on('change', async path => {
-        const success = await tryGenerateApiBindings();
+        const t2 = Date.now();
+        t1 = t2;
+        setTimeout(async () => {
+          if (t1 !== t2) {
+            queuedPaths.add(path);
+            return;
+          }
+          const paths = queuedPaths;
+          paths.add(path);
+          const success = await tryGenerateApiBindings();
         
-        const time = new Date().toLocaleTimeString()
-        if (success) {
-          console.log(`${styleText("gray", time)} ${styleText("magenta", "[api]")} ${styleText("green", "update")} ${styleText("gray", path)}`);
-        } else {
-          console.log(`${styleText("gray", time)} ${styleText("red", "[api]")} error, waiting for next update...`);
-        }
+          const time = new Date().toLocaleTimeString()
+          if (success) {
+            console.log(`${styleText("gray", time)} ${styleText("magenta", "[api]")} ${styleText("green", "update")} ${styleText("gray", [...paths.values()].join(", "))}`);
+          } else {
+            console.log(`${styleText("gray", time)} ${styleText("red", "[api]")} error, waiting for next update...`);
+          }
+        }, 10);
         // server.ws.send({ type: 'full-reload' });
       });
 
