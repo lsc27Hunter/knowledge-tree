@@ -16,44 +16,51 @@ import {
 } from "./Modal";
 import { fieldInputClass, FieldLabel } from "./DeckFormFields";
 
-export default function SettingsButton({
-  variant = "icon",
-  onOpen,
-}: {
-  variant?: "icon" | "row";
-  onOpen?: () => void;
-}) {
+export function SettingsButton() {
   const modalState = useModalState();
 
   function open() {
-    onOpen?.();
     modalState.open();
   }
 
   return (
     <>
-      {variant === "row" ? (
-        <button
-          type="button"
-          className={`${interactive} ${focusRing} flex min-h-11 w-full items-center gap-3 rounded-lg px-3 type-body font-medium text-fg hover:bg-primary-grey/70`}
-          onClick={open}
-        >
-          <img src={Gear} alt="" className="theme-icon h-5 w-5" />
-          Settings
-        </button>
-      ) : (
-        <IconButton
-          icon={Gear}
-          ariaLabel="Open settings"
-          onClick={open}
-        />
-      )}
+      <IconButton
+        icon={Gear}
+        ariaLabel="Open settings"
+        onClick={open}
+      />
       <SettingsModal modalState={modalState} />
     </>
   );
 }
 
-function SettingsModal({ modalState }: { modalState: ModalState }) {
+export function SettingsRowButton({
+  modalState,
+  onOpen,
+}: {
+  modalState: ModalState;
+  onOpen: () => void;
+}) {
+
+  function open() {
+    onOpen();
+    modalState.open();
+  }
+
+  return (
+    <button
+      type="button"
+      className={`${interactive} ${focusRing} flex min-h-11 w-full items-center gap-3 rounded-lg px-3 type-body font-medium text-fg hover:bg-primary-grey/70`}
+      onClick={open}
+    >
+      <img src={Gear} alt="" className="theme-icon h-5 w-5" />
+      Settings
+    </button>
+  );
+}
+
+export function SettingsModal({ modalState }: { modalState: ModalState }) {
   return (
     <ModalShell state={modalState} size="sm">
       <ModalHeaderShell>
