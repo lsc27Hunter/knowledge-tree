@@ -11,11 +11,12 @@ import { Link, NavLink } from "react-router-dom";
 import { Logo } from "./Logo";
 import { Button } from "./Button";
 import CreateDeckButton from "./CreateDeckButton";
-import SettingsButton from "./SettingsButton";
+import { SettingsButton, SettingsRowButton, SettingsModal } from "./SettingsButton";
 import { ThemeToggle } from "./ThemeToggle";
 import { focusRing, interactive } from "../../lib/interaction";
 
 import ArrowLeft from "../../assets/arrow-right.svg";
+import { useModalState } from "./Modal";
 
 interface NavbarProps {
   version: "Landing" | "Dashboard" | "Discovery" | "Blank" | "Study";
@@ -41,11 +42,8 @@ export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
       if (e.key === "Escape") setMenuOpen(false);
     };
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
     };
   }, [menuOpen]);
 
@@ -187,88 +185,92 @@ function MobileMenu({
   userButton?: ReactNode;
 }) {
   const titleId = useId();
+  const settingsModalState = useModalState();
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.button
-            type="button"
-            aria-label="Close menu"
-            className="fixed inset-0 top-16 z-40 bg-overlay/50 backdrop-blur-[2px] md:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            onClick={onClose}
-          />
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            className="absolute inset-x-0 top-16 z-50 border-b border-border bg-background shadow-[var(--shadow-card)] md:hidden"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="mx-auto flex max-w-7xl flex-col gap-1 px-3 py-3 sm:px-6">
-              <p id={titleId} className="sr-only">
-                Menu
-              </p>
-
-              {showAppNav ? (
-                <nav aria-label="Primary" className="flex flex-col gap-1">
-                  <MobileNavItem to="/dashboard" label="Decks" onNavigate={onClose} />
-                  <MobileNavItem to="/discovery" label="Discover" onNavigate={onClose} />
-                </nav>
-              ) : null}
-
-              {version === "Landing" ? (
-                <nav aria-label="Account" className="flex flex-col gap-1">
-                  <MobileLinkItem to="/sign-in" label="Sign In" onNavigate={onClose} />
-                </nav>
-              ) : null}
-
-              {version === "Study" ? (
-                <nav aria-label="Study" className="flex flex-col gap-1">
-                  <MobileLinkItem
-                    to="/dashboard"
-                    label="Back To Dashboard"
-                    onNavigate={onClose}
-                  />
-                </nav>
-              ) : null}
-
-              <div
-                className={`flex flex-col gap-1 ${
-                  showAppNav || version === "Landing" || version === "Study"
-                    ? "mt-2 border-t border-border pt-2"
-                    : ""
-                }`}
-              >
-                <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-3">
-                  <span className="type-body font-medium text-fg">Theme</span>
-                  <ThemeToggle />
-                </div>
+    <>
+      <AnimatePresence>
+        {open ? (
+          <>
+            <motion.button
+              type="button"
+              aria-label="Close menu"
+              className="fixed inset-0 top-16 z-40 bg-overlay/50 backdrop-blur-[2px] md:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={onClose}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              className="absolute inset-x-0 top-16 z-50 border-b border-border bg-background shadow-[var(--shadow-card)] md:hidden"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="mx-auto flex max-w-7xl flex-col gap-1 px-3 py-3 sm:px-6">
+                <p id={titleId} className="sr-only">
+                  Menu
+                </p>
 
                 {showAppNav ? (
-                  <>
-                    <SettingsButton variant="row" onOpen={onClose} />
-                    {userButton ? (
-                      <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-3">
-                        <span className="type-body font-medium text-fg">Account</span>
-                        <div className="flex items-center">{userButton}</div>
-                      </div>
-                    ) : null}
-                  </>
+                  <nav aria-label="Primary" className="flex flex-col gap-1">
+                    <MobileNavItem to="/dashboard" label="Decks" onNavigate={onClose} />
+                    <MobileNavItem to="/discovery" label="Discover" onNavigate={onClose} />
+                  </nav>
                 ) : null}
+
+                {version === "Landing" ? (
+                  <nav aria-label="Account" className="flex flex-col gap-1">
+                    <MobileLinkItem to="/sign-in" label="Sign In" onNavigate={onClose} />
+                  </nav>
+                ) : null}
+
+                {version === "Study" ? (
+                  <nav aria-label="Study" className="flex flex-col gap-1">
+                    <MobileLinkItem
+                      to="/dashboard"
+                      label="Back To Dashboard"
+                      onNavigate={onClose}
+                    />
+                  </nav>
+                ) : null}
+
+                <div
+                  className={`flex flex-col gap-1 ${
+                    showAppNav || version === "Landing" || version === "Study"
+                      ? "mt-2 border-t border-border pt-2"
+                      : ""
+                  }`}
+                >
+                  <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-3">
+                    <span className="type-body font-medium text-fg">Theme</span>
+                    <ThemeToggle />
+                  </div>
+
+                  {showAppNav ? (
+                    <>
+                      <SettingsRowButton modalState={settingsModalState} onOpen={() => setTimeout(onClose, 65)} />
+                      {userButton ? (
+                        <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-3">
+                          <span className="type-body font-medium text-fg">Account</span>
+                          <div className="flex items-center">{userButton}</div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+      <SettingsModal modalState={settingsModalState} />
+    </>
   );
 }
 
