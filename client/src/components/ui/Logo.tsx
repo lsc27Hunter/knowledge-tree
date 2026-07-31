@@ -1,16 +1,12 @@
-import knowledgeTreeIcon from "../../assets/git_knowledgetree-icon.svg";
-
 export function Logo() {
   return (
-    <div
-      className={`flex items-center gap-2 text-white font-jetbrains text-lg sm:text-title-small`}
-    >
+    <div className="type-mono flex min-w-0 items-center gap-2 text-fg text-[1.05rem] sm:text-[1.25rem]">
       <img
-        src={knowledgeTreeIcon}
-        alt="KnowledgeTree"
-        className="h-8 w-8 sm:h-10 sm:w-10"
+        src="/git_knowledgetree-icon.svg"
+        alt=""
+        className="theme-icon h-8 w-8 shrink-0 sm:h-9 sm:w-9"
       />
-      <h1 className="leading-none">KnowledgeTree</h1>
+      <span className="truncate font-medium">KnowledgeTree</span>
     </div>
   );
 }

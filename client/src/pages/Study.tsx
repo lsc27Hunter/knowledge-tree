@@ -1,17 +1,30 @@
 import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
+import { useParams } from "react-router-dom";
 
-import { Navbar } from "../components/ui/Navbar";
+import {
+  completeStudySession,
+  getDeckMastery,
+  reviewCard,
+  study,
+  type StudySessionResponse,
+} from "../api";
 import ArrowRight from "../assets/arrow-right-thin.svg";
 import GreenCheckSquare from "../assets/green-check-square.svg";
-import YellowSquare from "../assets/yellow-square.svg";
 import RedXSquare from "../assets/red-x-square.svg";
-import { Link, useParams } from "react-router-dom";
-import { reviewCard, study, type StudySessionResponse, completeStudySession, getDeckMastery } from "../api";
+import YellowSquare from "../assets/yellow-square.svg";
+import { Button } from "../components/ui/Button";
+import { Navbar } from "../components/ui/Navbar";
+import { PageShell } from "../components/ui/PageShell";
+import { Spinner } from "../components/ui/Spinner";
+import { focusRing, interactive } from "../lib/interaction";
+import { fadeUp, slideHorizontal } from "../lib/motion";
 
 const StudyPage: React.FC = () => {
   return (
     <>
-      <Navbar version="Blank" />
+      <Navbar version="Study" />
       <StudySection />
     </>
   );
@@ -32,47 +45,79 @@ function StudySection() {
   const [cardsLeft, setCardsLeft] = useState(true);
 
   function beginStudy() {
-    study({ path: { deckId }}).then(res => {
-      if (res.data) {
-        const fetchedStudySession = res.data;
-        setStudySession(fetchedStudySession);
-        const fetchedRatings = new Map();
-        for (const card of fetchedStudySession.cards) {
-          if (card.rating != null) {
-            fetchedRatings.set(card.id, card.rating);
-          }
+    setIsLoading(true);
+    study({ path: { deckId }})
+      .then((res) => {
+        if (res.error) {
+          throw res.error;
         }
-        setStartFrom(fetchedStudySession.index);
-        switch (fetchedStudySession.page) {
-          case "cards": {
-            setPage({ name: "cards" });
-            break;
+        if (res.data) {
+          const fetchedStudySession = res.data;
+          setStudySession(fetchedStudySession);
+          const fetchedRatings = new Map();
+          for (const card of fetchedStudySession.cards) {
+            if (card.rating != null) {
+              fetchedRatings.set(card.id, card.rating);
+            }
           }
-          case "results": {
-            setPage({
-              name: "results",
-              mastery: fetchedStudySession.mastery,
-              oldMastery: fetchedStudySession.oldMastery,
-            });
-            break;
+          setStartFrom(fetchedStudySession.index);
+          switch (fetchedStudySession.page) {
+            case "cards": {
+              setPage({ name: "cards" });
+              break;
+            }
+            case "results": {
+              setPage({
+                name: "results",
+                mastery: fetchedStudySession.mastery,
+                oldMastery: fetchedStudySession.oldMastery,
+              });
+              break;
+            }
           }
+          setRatings(fetchedRatings);
+          setCardsLeft(fetchedStudySession.cardsLeft);
+        } else {
+          setStudySession(null);
+          toast.error("Couldn't start study session");
         }
-        setRatings(fetchedRatings);
-        setCardsLeft(fetchedStudySession.cardsLeft);
-      }
-      setIsLoading(false);
-    });
+      })
+      .catch((error) => {
+        setStudySession(null);
+        toast.error("Couldn't start study session", {
+          description:
+            error instanceof Error ? error.message : "Please try again.",
+        });
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }
 
   useEffect(() => {
     beginStudy();
   }, [deckId]);
   if (isLoading) {
-    return (<div>Loading...</div>);
+    return (
+      <PageShell>
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <Spinner />
+        </div>
+      </PageShell>
+    );
   }
   if (studySession == null) {
-    console.error("deck not found.");
-    return (<div>Error: deck not found.</div>);
+    return (
+      <PageShell>
+        <div className="mt-8 flex flex-col items-center gap-4 text-center">
+          <p className="type-heading text-fg">Deck Not Found</p>
+          <p className="max-w-md type-body text-primary-light-grey">
+            This deck may have been deleted, or you might not have access to it.
+          </p>
+          <Button text="Back To Dashboard" to="/dashboard" color="accent" textColor="white" />
+        </div>
+      </PageShell>
+    );
   }
 
   function gotoResults(oldMastery: number, newCardsLeft: boolean = cardsLeft ) {
@@ -113,11 +158,11 @@ function StudySection() {
   }
 
   return (
-    <div className="flex w-full justify-center">
-      <div className="flex flex-col w-full max-w-140 items-center px-3 mt-14">
+    <PageShell>
+      <div className="mx-auto flex w-full max-w-xl flex-col items-center">
         {getPage(studySession)}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
@@ -133,10 +178,12 @@ interface CardsPageProps {
 function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResultsPage, rate: _rate }: CardsPageProps) {
   const cards = studySession.cards;
   const [index, setIndex] = useState(startFrom);
+  const [direction, setDirection] = useState(0);
   const [revealed, setRevealed] = useState(false);
   function prev() {
     const i = index - 1;
     if (i >= 0) {
+      setDirection(-1);
       setIndex(i);
       setRevealed(false);
     }
@@ -144,6 +191,7 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResult
   function nextCard() {
     const i = index + 1;
     if (i < cards.length) {
+      setDirection(1);
       setIndex(i);
       setRevealed(false);
       return true;
@@ -189,11 +237,17 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResult
         body: {
           rating,
         },
+      }).catch((error) => {
+        toast.error("Couldn't save rating", {
+          description:
+            error instanceof Error ? error.message : "Please try again.",
+        });
+        return null;
       });
       if (!nextCard()) {
         gotoResults(studySession.oldMastery, false);
-        reviewCardPromise.then(res => {
-          if (res.data) {
+        reviewCardPromise.then((res) => {
+          if (res?.data) {
             updateResultsPage(res.data.mastery, res.data.cardsLeft);
           }
         });
@@ -215,9 +269,14 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResult
 
   if (cards.length === 0) {
     return (
-      <div className="flex flex-col items-center mt-20 min-h-120">
-        <div className="text-white text-lg font-inter">Nothing left to review! ✅</div>
-        <Link className="bg-accent text-white font-bold px-4 py-2 rounded mt-8 text-xl" to="/dashboard">Back to dashboard</Link>
+      <div className="mt-16 flex min-h-80 flex-col items-center text-center">
+        <div className="type-title text-fg">Nothing Left To Review</div>
+        <p className="type-caption mt-2 text-primary-light-grey">
+          You&apos;re caught up on this deck for now.
+        </p>
+        <div className="mt-8">
+          <Button text="Back To Dashboard" to="/dashboard" color="accent" textColor="white" />
+        </div>
       </div>
     );
   }
@@ -227,8 +286,28 @@ function CardsPage({ studySession, startFrom, ratings, gotoResults, updateResult
   return (
     <>
       <CardNav cardCount={cards.length} index={index} prev={prev} next={next} />
-      <Card className="mt-1" question={card.question} answer={card.answer} revealed={revealed} rating={rating} toggleRevealed={toggleRevealed} />
-      <ButtonRow className="sm:mt-7 mt-6" onRed={onRed} onYellow={onYellow} onGreen={onGreen} rating={rating} />
+      <div className="relative mt-3 w-full overflow-hidden">
+        <AnimatePresence mode="wait" custom={direction} initial={false}>
+          <motion.div
+            key={card.id}
+            custom={direction}
+            variants={slideHorizontal}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            className="w-full"
+          >
+            <Card
+              question={card.question}
+              answer={card.answer}
+              revealed={revealed}
+              rating={rating}
+              toggleRevealed={toggleRevealed}
+            />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <ButtonRow className="mt-6 sm:mt-8" onRed={onRed} onYellow={onYellow} onGreen={onGreen} rating={rating} />
     </>
   );
 }
@@ -278,17 +357,32 @@ function ResultsPage({ ratings, studySession, mastery, oldMastery, cardsLeft, be
       path: {
         deckId: studySession.deckId,
       },
-    }).then(res => {
-      if (res.data) {
-        beginStudy();
-      }
-    });
+    })
+      .then((res) => {
+        if (res.error) {
+          throw res.error;
+        }
+        if (res.data) {
+          beginStudy();
+        }
+      })
+      .catch((error) => {
+        toast.error("Couldn't continue session", {
+          description:
+            error instanceof Error ? error.message : "Please try again.",
+        });
+      });
   }
   function finishReview() {
     completeStudySession({
       path: {
         deckId: studySession.deckId,
       },
+    }).catch((error) => {
+      toast.error("Couldn't finish session", {
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+      });
     });
   }
   let greens = 0;
@@ -307,34 +401,54 @@ function ResultsPage({ ratings, studySession, mastery, oldMastery, cardsLeft, be
   const masteryColor = getMasteryColor(masteryAnim);
 
   return (
-    <>
+    <div className="flex w-full flex-col items-center">
       <ResultsNav prev={goBackToCards} />
-      <div className="max-w-80 w-full mt-8">
-        <div className="text-center font-jetbrains text-lg">
-          <span className="text-right" style={{ color: masteryColor }}>Mastery</span><span className="text-right text-white ml-3">{masteryAnimRounded}%</span>
+      <div className="mt-8 w-full max-w-sm rounded-2xl border border-border bg-primary-grey p-5 shadow-sm sm:p-6">
+        <div className="type-mono text-center text-lg">
+          <span style={{ color: masteryColor }}>Mastery</span>
+          <span className="ml-3 text-fg">{masteryAnimRounded}%</span>
         </div>
-        <div className="bg-primary-light-grey rounded-full h-2 mt-1 grid">
+        <div className="mt-3 grid h-2 rounded-full bg-border">
           <div className="h-full rounded-full" style={{ width: `${masteryAnim}%`, backgroundColor: `color-mix(in lab, black 15%, ${masteryColor})`, gridArea: "1 / 1" }}></div>
           <div className="h-full rounded-full" style={{ width: `${oldMastery}%`, backgroundColor: masteryColor, gridArea: "1 / 1" }}></div>
         </div>
+        <table className="type-mono mx-auto mt-6 table-fixed border-separate border-spacing-x-3 border-spacing-y-1.5 text-fg">
+          <tbody>
+            <tr><td className="text-right text-success-green">Mastered</td><td className="text-right">{greens}</td></tr>
+            <tr><td className="text-right text-warning-yellow">Working On</td><td className="text-right">{yellows}</td></tr>
+            <tr><td className="text-right text-danger-red">Forgot</td><td className="text-right">{reds}</td></tr>
+            <tr><td className="text-right text-primary-light-grey">Skipped</td><td className="text-right">{skipped}</td></tr>
+          </tbody>
+        </table>
+        <div className={`type-mono mt-4 text-center text-lg ${accuracy === null ? "invisible" : ""}`}>
+          <span className="text-accent">Accuracy</span>
+          <span className="ml-3 text-fg">{accuracy}%</span>
+        </div>
       </div>
-      <table className="text-white font-jetbrains mr-6 mt-8 table-fixed border-separate border-spacing-x-3 border-spacing-y-1.5">
-        <tbody>
-          <tr><td className="text-right text-success-green">Mastered</td><td className="text-right">{greens}</td></tr>
-          <tr><td className="text-right text-warning-yellow">Working on</td><td className="text-right">{yellows}</td></tr>
-          <tr><td className="text-right text-danger-red">Forgot</td><td className="text-right">{reds}</td></tr>
-          <tr><td className="text-right text-gray-300">Skipped</td><td className="text-right">{skipped}</td></tr>
-        </tbody>
-      </table>
-      <div className={`text-center font-jetbrains text-lg mt-3 ${accuracy === null ? "invisible" : ""}`}>
-        <span className="text-right text-purple-500">Accuracy</span><span className="text-right text-white ml-3">{accuracy}%</span>
+      {cardsLeft ? (
+        <div className="mt-6 w-full max-w-sm">
+          <Button
+            text="Continue This Deck"
+            width="full"
+            color="accent"
+            textColor="white"
+            onClick={continueThisDeck}
+          />
+        </div>
+      ) : (
+        <div className="mt-6 type-title text-fg">Deck Complete!</div>
+      )}
+      <div className="mb-2 mt-3 w-full max-w-sm">
+        <Button
+          text="Finish Review"
+          width="full"
+          color="accent"
+          textColor="white"
+          to="/dashboard"
+          onClick={finishReview}
+        />
       </div>
-      {cardsLeft ?
-        <button className="cursor-pointer bg-accent text-white font-bold w-52 text-center py-2 rounded mt-6 text-lg" onClick={continueThisDeck}>Continue this deck</button> :
-        <div className="text-white text-lg font-bold mt-6">Deck complete!</div>
-      }
-      <Link className="bg-accent text-white font-bold w-52 text-center py-2 rounded mt-4 mb-2 text-xl" to="/dashboard" onClick={finishReview}>Finish review</Link>
-    </>
+    </div>
   );
 }
 
@@ -362,13 +476,29 @@ interface CardNavProps {
 
 function CardNav({ cardCount, index, prev, next }: CardNavProps) {
   return (
-    <div className="grid w-full items-center h-10 select-none" style={{ gridTemplateColumns: "1fr auto 1fr"}}>
-      {index > 0 && <button className="h-full cursor-pointer col-1 justify-self-start" onClick={prev}>
-        <img className="rotate-180" src={ArrowRight} alt="next" />
-      </button>}
-      {cardCount > 0 && <div className="text-gray-400 font-jetbrains col-2 justify-self-center">{index + 1}/{cardCount}</div>}
-      <button className="h-full cursor-pointer col-3 justify-self-end" onClick={next}>
-        <img src={ArrowRight} alt="next" />
+    <div className="grid min-h-11 w-full select-none items-center" style={{ gridTemplateColumns: "1fr auto 1fr"}}>
+      {index > 0 && (
+        <button
+          type="button"
+          className={`${interactive} ${focusRing} col-1 inline-flex min-h-11 min-w-11 items-center justify-self-start rounded-md px-2 hover:opacity-80`}
+          onClick={prev}
+          aria-label="Previous Card"
+        >
+          <img className="theme-icon h-3.5 w-auto max-w-8 rotate-180" src={ArrowRight} alt="" />
+        </button>
+      )}
+      {cardCount > 0 && (
+        <div className="type-mono col-2 justify-self-center text-primary-light-grey">
+          {index + 1}/{cardCount}
+        </div>
+      )}
+      <button
+        type="button"
+        className={`${interactive} ${focusRing} col-3 inline-flex min-h-11 min-w-11 items-center justify-self-end rounded-md px-2 hover:opacity-80`}
+        onClick={next}
+        aria-label="Next Card"
+      >
+        <img className="theme-icon h-3.5 w-auto max-w-8" src={ArrowRight} alt="" />
       </button>
     </div>
   );
@@ -380,11 +510,16 @@ interface ResultsNavProps {
 
 function ResultsNav({ prev }: ResultsNavProps) {
   return (
-    <div className="grid w-full items-center h-10 select-none" style={{ gridTemplateColumns: "1fr auto 1fr"}}>
-      <button className="h-full cursor-pointer col-1 justify-self-start" onClick={prev}>
-        <img className="rotate-180" src={ArrowRight} alt="next" />
+    <div className="grid min-h-11 w-full select-none items-center" style={{ gridTemplateColumns: "1fr auto 1fr"}}>
+      <button
+        type="button"
+        className={`${interactive} ${focusRing} col-1 inline-flex min-h-11 min-w-11 items-center justify-self-start rounded-md px-2 hover:opacity-80`}
+        onClick={prev}
+        aria-label="Back To Cards"
+      >
+        <img className="theme-icon h-3.5 w-auto max-w-8 rotate-180" src={ArrowRight} alt="" />
       </button>
-      <div className="text-white text-2xl font-inter col-2 justify-self-center">Results</div>
+      <div className="type-heading col-2 justify-self-center text-fg">Results</div>
     </div>
   );
 }
@@ -398,58 +533,86 @@ interface ButtonRowProps {
 }
 
 function ButtonRow({ className = "", rating, onRed, onYellow, onGreen }: ButtonRowProps) {
+  const hasSelection = rating !== undefined;
   return (
-    <div className={`grid items-center w-full sm:px-15 h-14 ${className}`} style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-      <RedButton onPress={onRed} selected={rating === "red"} />
-      <YellowButton onPress={onYellow} selected={rating === "yellow"} />
-      <GreenButton onPress={onGreen} selected={rating === "green"} />
+    <div className={`grid h-14 w-full items-center px-1 sm:px-8 ${className}`} style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+      <RedButton onPress={onRed} selected={rating === "red"} hasSelection={hasSelection} />
+      <YellowButton onPress={onYellow} selected={rating === "yellow"} hasSelection={hasSelection} />
+      <GreenButton onPress={onGreen} selected={rating === "green"} hasSelection={hasSelection} />
     </div>
   );
 }
 
 interface ButtonProps {
   selected: boolean;
+  hasSelection: boolean;
   onPress: () => void;
 }
 
-function RedButton({ selected, onPress }: ButtonProps) {
-  const scale = useButtonScale("1", selected, onPress);
+function RedButton({ selected, hasSelection, onPress }: ButtonProps) {
+  const scale = useButtonScale("1", selected, hasSelection, onPress);
   return (
-    <button className={`cursor-pointer justify-self-center ${scale}`}
-      style={{ transition: "scale 0.08s ease-out" }} onClick={onPress}>
-      <img className="h-14" src={RedXSquare} alt="forgot" />
+    <button
+      type="button"
+      className={`${interactive} ${focusRing} justify-self-center rounded-xl ${scale}`}
+      style={{ transition: "scale 0.08s ease-out, opacity 0.15s ease-out" }}
+      onClick={onPress}
+      aria-label="Forgot"
+      aria-pressed={selected}
+    >
+      <img className="h-14 w-14" src={RedXSquare} alt="" />
     </button>
   );
 }
 
-function YellowButton({ selected, onPress }: ButtonProps) {
-  const scale = useButtonScale("2", selected, onPress);
+function YellowButton({ selected, hasSelection, onPress }: ButtonProps) {
+  const scale = useButtonScale("2", selected, hasSelection, onPress);
   return (
-    <button className={`relative text-5xl cursor-pointer justify-self-center ${scale}`}
-      style={{ transition: "scale 0.08s ease-out" }} onClick={onPress}>
-      <img className="h-14" src={YellowSquare} alt="took a while" />
-      <div className="pb-[1.3ch] pointer-events-none absolute flex left-0 top-0 w-full h-full items-center justify-center text-warning-yellow">
+    <button
+      type="button"
+      className={`${interactive} ${focusRing} relative justify-self-center rounded-xl text-5xl ${scale}`}
+      style={{ transition: "scale 0.08s ease-out, opacity 0.15s ease-out" }}
+      onClick={onPress}
+      aria-label="Working On"
+      aria-pressed={selected}
+    >
+      <img className="h-14 w-14" src={YellowSquare} alt="" />
+      <div className="pointer-events-none absolute left-0 top-0 flex h-full w-full items-center justify-center pb-[1.3ch] text-warning-yellow">
         ...
       </div>
     </button>
   );
 }
 
-function GreenButton({ selected, onPress }: ButtonProps) {
-  const scale = useButtonScale("3", selected, onPress);
+function GreenButton({ selected, hasSelection, onPress }: ButtonProps) {
+  const scale = useButtonScale("3", selected, hasSelection, onPress);
   return (
-    <button className={`cursor-pointer justify-self-center ${scale}`}
-      style={{ transition: "scale 0.08s ease-out" }} onClick={onPress}>
-      <img className="h-14" src={GreenCheckSquare} alt="knew it instantly" />
+    <button
+      type="button"
+      className={`${interactive} ${focusRing} justify-self-center rounded-xl ${scale}`}
+      style={{ transition: "scale 0.08s ease-out, opacity 0.15s ease-out" }}
+      onClick={onPress}
+      aria-label="Mastered"
+      aria-pressed={selected}
+    >
+      <img className="h-14 w-14" src={GreenCheckSquare} alt="" />
     </button>
   );
 }
 
-function useButtonScale(key: string, selected: boolean, onPress: () => void) {
+function useButtonScale(
+  key: string,
+  selected: boolean,
+  hasSelection: boolean,
+  onPress: () => void,
+) {
   const keyPressed = useKeyPress(key, onPress);
-  if (selected) return "scale-[calc(10/14)]";
-  if (keyPressed) return "active:scale-[calc(12/14)] scale-[calc(12/14)]";
-  return "active:scale-[calc(12/14)]";
+  // Keep selected ≥44px: dim others instead of shrinking the active control.
+  if (hasSelection && !selected) {
+    return "opacity-40 active:scale-[calc(12/14)] active:opacity-100";
+  }
+  if (keyPressed) return "opacity-100 active:scale-[calc(12/14)] scale-[calc(12/14)]";
+  return "opacity-100 active:scale-[calc(12/14)]";
 }
 
 interface CardProps {
@@ -463,17 +626,40 @@ interface CardProps {
 
 function Card({ className = "", question, answer, revealed, rating, toggleRevealed }: CardProps) {
   const borderColor = toBorderColor(rating);
-  const bgColor = useKeyDown(" ", toggleRevealed) ? "bg-[#222]" : "bg-primary-grey";
+  const bgColor = useKeyDown(" ", toggleRevealed) ? "bg-surface-raised" : "bg-primary-grey";
   return (
-    <div className={`flex flex-col pt-11 pb-6 px-6 font-jetbrains items-center justify-between ${bgColor} active:bg-[#222] border ${borderColor} rounded w-full min-h-64 cursor-pointer select-none ${className}`}
-      onClick={toggleRevealed}>
-        {revealed ? 
-          <div className="text-white whitespace-pre-line">{answer}</div> :
-          <>
-            <div className="text-white whitespace-pre-line">{question}</div>
-            <div className="text-primary-light-grey">Click to reveal</div>
-          </>
-        }
+    <div
+      role="button"
+      tabIndex={0}
+      className={`${interactive} ${focusRing} flex min-h-56 w-full select-none flex-col items-center justify-between rounded-2xl border ${borderColor} ${bgColor} px-4 pb-5 pt-9 font-jetbrains shadow-sm active:bg-surface-raised sm:min-h-64 sm:px-6 sm:pb-6 sm:pt-11 ${className}`}
+      onClick={toggleRevealed}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") toggleRevealed();
+      }}
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={revealed ? "answer" : "question"}
+          className="flex w-full min-w-0 flex-1 flex-col items-center justify-between"
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }}
+        >
+          {revealed ? (
+            <div className="break-words whitespace-pre-line text-center text-fg [overflow-wrap:anywhere]">
+              {answer}
+            </div>
+          ) : (
+            <>
+              <div className="break-words whitespace-pre-line text-center text-fg [overflow-wrap:anywhere]">
+                {question}
+              </div>
+              <div className="type-caption text-primary-light-grey">Click To Reveal</div>
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
@@ -490,7 +676,7 @@ function toBorderColor(rating: Rating | undefined) {
       return "border-success-green";
     }
     case undefined: {
-      return "border-primary-light-grey";
+      return "border-border";
     }
   }
 }
