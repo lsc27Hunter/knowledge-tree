@@ -34,6 +34,7 @@ export default function EditDeckButton({ deckId, onSaved }: EditDeckButtonProps)
         icon={EditIcon}
         ariaLabel="Edit Deck"
         onClick={modalState.open}
+        small
       />
       <EditDeckModal
         deckId={deckId}

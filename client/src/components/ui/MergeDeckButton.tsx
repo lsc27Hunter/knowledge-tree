@@ -59,6 +59,7 @@ export default function MergeDeckButton({
         icon={UploadIcon}
         ariaLabel="Merge CSV Into Deck"
         onClick={openFilePicker}
+        small
       />
       <MergeDiffModal
         state={previewState}

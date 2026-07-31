@@ -30,6 +30,7 @@ import {
   useModalState,
   type ModalState,
 } from "./Modal";
+import { ExportDeckButton, ExportDiscoverableDeckButton} from "./ExportDeckButton";
 
 interface DeckCardProps {
   deckData: Deck;
@@ -117,6 +118,7 @@ export function DeckCard({
               icon={Preview}
               ariaLabel="Preview deck"
               onClick={previewModalState.open}
+              small
             />
           ) : (
             <>
@@ -126,12 +128,14 @@ export function DeckCard({
                 deckName={deckData.name}
                 onMerged={onChanged}
               />
+              <ExportDeckButton deckId={deckId} />
               <IconButton
                 icon={Trash}
                 ariaLabel="Delete deck"
                 tone="danger"
                 themeIcon={false}
                 onClick={deleteModalState.open}
+                small
               />
             </>
           )}
@@ -366,16 +370,18 @@ function PreviewContent({
       </ModalBody>
       {deck ? (
         <ModalFooter>
-          <Button
-            text={isSaving ? "Adding…" : "Add To My Dashboard"}
-            width="full"
-            color="accent"
-            textColor="white"
-            disabled={isSaving}
-            onClick={() => {
-              void addToDashboard();
-            }}
-          />
+          <div className="w-full flex justify-end items-center gap-2">
+            <ExportDiscoverableDeckButton deckId={deckId} />
+            <Button
+              text={isSaving ? "Adding…" : "Add To My Dashboard"}
+              color="accent"
+              textColor="white"
+              disabled={isSaving}
+              onClick={() => {
+                void addToDashboard();
+              }}
+            />
+          </div>
         </ModalFooter>
       ) : null}
     </>
