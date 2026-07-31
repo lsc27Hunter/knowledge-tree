@@ -2,11 +2,9 @@ import { UserButton, useUser } from "@clerk/react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-
 import { getDecks, getStreak, type DeckListResponse } from "../api";
 
 import { toast } from "sonner";
-
 
 import { Navbar } from "../components/ui/Navbar";
 import {
@@ -37,19 +35,13 @@ function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
   };
 }
 
-function isDeckReady(deck: DashboardDeck): boolean {
-  if (!deck.nextReviewDate) return true;
-  const next = new Date(deck.nextReviewDate + "Z").getTime();
-  if (Number.isNaN(next)) return true;
-  return next <= Date.now();
-}
-
 export default function DashboardPage() {
   const { isLoaded, user } = useUser();
   const [sortingOption, setSortingOption] = useState("Next Review");
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [decks, setDecks] = useState<DashboardDeck[]>([]);
   const [decksError, setDecksError] = useState<string | null>(null);
+  const [isDecksLoading, setIsDecksLoading] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [streakError, setStreakError] = useState<string | null>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
@@ -62,6 +54,7 @@ export default function DashboardPage() {
 
     try {
       setDecksError(null);
+      setIsDecksLoading(true);
       const result = await getDecks();
 
       if (result.error) {
@@ -73,6 +66,8 @@ export default function DashboardPage() {
         error instanceof Error ? error.message : "Failed to load decks.";
       setDecksError(message);
       toast.error("Couldn't load decks", { description: message });
+    } finally {
+      setIsDecksLoading(false);
     }
   }, [isLoaded]);
 
@@ -131,19 +126,8 @@ export default function DashboardPage() {
     );
   }
 
-
-  const userData = {
-    userId: user?.id,
-    userName: user?.username ?? user?.fullName ?? user?.firstName ?? "Learner",
-    userEmail: user?.primaryEmailAddress?.emailAddress ?? "",
-    userFirstName:
-      user?.username?.split(" ")[0] ?? user?.firstName ?? "Learner",
-    currentStreak,
-  };
-
   const displayName =
     user?.username?.split(" ")[0] ?? user?.firstName ?? "Learner";
-
 
   const sortedDecks = [...decks].sort((a, b) => {
     if (sortingOption === "Next Review") {
@@ -174,7 +158,6 @@ export default function DashboardPage() {
     deckCount === 0
       ? 0
       : sortedDecks.reduce((acc, deck) => acc + deck.mastery, 0) / deckCount;
-  const readyNowCount = sortedDecks.filter(isDeckReady).length;
 
   const decksDueThisWeek = sortedDecks.filter((deck) => {
     if (!deck.dueDate) return false;
@@ -224,8 +207,8 @@ export default function DashboardPage() {
           />
           <Stat
             icon={StarBadge}
-            value={String(readyNowCount)}
-            label={readyNowCount === 1 ? "Deck Ready Now" : "Decks Ready Now"}
+            value={streakError ? "0" : String(currentStreak)}
+            label={currentStreak === 1 ? "Day Streak" : "Days Streak"}
           />
           <Stat
             icon={Danger}
@@ -248,7 +231,10 @@ export default function DashboardPage() {
               onClick={() => setIsSortMenuOpen((open) => !open)}
             >
               <span className="truncate">Sort · {sortingOption}</span>
-              <span className="ml-2 shrink-0 text-primary-light-grey" aria-hidden="true">
+              <span
+                className="ml-2 shrink-0 text-primary-light-grey"
+                aria-hidden="true"
+              >
                 ▾
               </span>
             </button>
@@ -277,36 +263,47 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {sortedDecks.length === 0 && !decksError ? (
-          <div className="mt-12 rounded-2xl border border-dashed border-border bg-primary-grey/50 px-6 py-12 text-center">
-            <h2 className="type-title text-fg">No Decks Yet</h2>
-            <p className="type-body mx-auto mt-2 max-w-md text-primary-light-grey">
-              Create a deck manually, upload a CSV, or grab one from Discovery to
-              start studying.
-            </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Button
-                text="Browse Discovery"
-                width="fit"
-                color="primary-grey"
-                textColor="fg"
-                to="/discovery"
-              />
+        <div className="relative mt-8">
+          {isDecksLoading ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl border border-border/60 bg-background/70 backdrop-blur-sm">
+              <div className="flex items-center gap-3 rounded-full border border-border bg-primary-grey/90 px-4 py-3 shadow-lg">
+                <Spinner className="h-5 w-5" />
+                <span className="type-body text-fg">Loading decks…</span>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {sortedDecks.map((deck) => (
-              <DeckCard
-                key={deck.id}
-                deckData={deck}
-                onChanged={() => {
-                  void loadDecks();
-                }}
-              />
-            ))}
-          </div>
-        )}
+          ) : null}
+
+          {sortedDecks.length === 0 && !decksError ? (
+            <div className="rounded-2xl border border-dashed border-border bg-primary-grey/50 px-6 py-12 text-center">
+              <h2 className="type-title text-fg">No Decks Yet</h2>
+              <p className="type-body mx-auto mt-2 max-w-md text-primary-light-grey">
+                Create a deck manually, upload a CSV, or grab one from Discovery
+                to start studying.
+              </p>
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                <Button
+                  text="Browse Discovery"
+                  width="fit"
+                  color="primary-grey"
+                  textColor="fg"
+                  to="/discovery"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {sortedDecks.map((deck) => (
+                <DeckCard
+                  key={deck.id}
+                  deckData={deck}
+                  onChanged={() => {
+                    void loadDecks();
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </PageShell>
     </div>
   );
@@ -325,7 +322,9 @@ function Stat({
     <div className="flex flex-row items-center gap-3">
       <img src={icon} alt="" className="h-12 w-12 shrink-0 md:h-16 md:w-16" />
       <div className="flex min-w-0 flex-col">
-        <div className="text-[1.75rem] leading-none md:text-[2rem]">{value}</div>
+        <div className="text-[1.75rem] leading-none md:text-[2rem]">
+          {value}
+        </div>
         <div className="type-caption mt-1 text-primary-light-grey">{label}</div>
       </div>
     </div>
