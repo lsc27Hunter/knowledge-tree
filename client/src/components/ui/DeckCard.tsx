@@ -176,7 +176,6 @@ export function DeckCard({
             textColor="white"
             icon={ArrowRight}
             iconPosition="right"
-            themeIcon
             to={`/study/${deckId}`}
           />
         ) : (
