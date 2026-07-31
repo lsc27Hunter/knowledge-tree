@@ -55,7 +55,6 @@ export default function CreateDeckButton({
         iconSize="w-5 h-5"
         iconPosition="right"
         iconOnlyOnMobile
-        themeIcon
         ariaLabel="Create Deck"
       />
       <CreateDeckModal modalState={modalState} onCreated={onCreated} />
