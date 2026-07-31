@@ -6,7 +6,7 @@ export function Logo() {
         alt=""
         className="theme-icon h-8 w-8 shrink-0 sm:h-9 sm:w-9"
       />
-      <span className="truncate leading-none font-medium">KnowledgeTree</span>
+      <span className="truncate font-medium">KnowledgeTree</span>
     </div>
   );
 }
