@@ -1,7 +1,8 @@
 # Database models and API schemas.
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, date
+
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -59,6 +60,18 @@ class StudySessionCard(Base):
   card: Mapped["Card"] = relationship(back_populates="study_session_card", init=False)
   study_session: Mapped["StudySession"] = relationship(back_populates="cards", init=False)
 
+class UserStudyDay(Base):
+  __tablename__ = "user_study_day"
+  __table_args__ = (UniqueConstraint("user_id", "study_date"),)
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  user_id: Mapped[str]
+  study_date: Mapped[date]
+  reviews_count: Mapped[int] = mapped_column(default=0)
+  unique_cards_count: Mapped[int] = mapped_column(default=0)
+  qualifies_for_streak: Mapped[bool] = mapped_column(default=False)
+  first_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
+  last_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
 class PushSubscription(Base):
   __tablename__ = "push_subscription"
 
@@ -258,6 +271,14 @@ class StudySessionCardResponse(APISchema):
 class CompleteStudySessionResponse(APISchema):
   success: bool
 
+
+class StreakResponse(APISchema):
+  current_streak: int
+  longest_streak: int
+  today_reviews_count: int
+  today_unique_cards_count: int
+  minimum_cards_per_day: int
+  qualifies_today: bool
 class SettingsGet(APISchema):
   push_subscription: "PushSubscriptionData | None"
 

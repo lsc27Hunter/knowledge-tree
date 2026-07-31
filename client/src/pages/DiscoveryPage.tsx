@@ -35,6 +35,7 @@ export default function DiscoveryPage() {
   const { isLoaded, user } = useUser();
   const [decks, setDecks] = useState<DashboardDeck[]>([]);
   const [decksError, setDecksError] = useState<string | null>(null);
+  const [isDecksLoading, setIsDecksLoading] = useState(false);
 
   const loadDecks = useCallback(async () => {
     if (!isLoaded) {
@@ -43,6 +44,8 @@ export default function DiscoveryPage() {
 
     try {
       setDecksError(null);
+      setIsDecksLoading(true);
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
       const result = await getDiscoverableDecks();
 
       if (result.error) {
@@ -54,6 +57,8 @@ export default function DiscoveryPage() {
         error instanceof Error ? error.message : "Failed to load decks.";
       setDecksError(message);
       toast.error("Couldn't load discovery", { description: message });
+    } finally {
+      setIsDecksLoading(false);
     }
   }, [isLoaded]);
 
@@ -108,7 +113,20 @@ export default function DiscoveryPage() {
           <p className="type-caption mt-4 text-danger-red">{decksError}</p>
         ) : null}
 
-        {mine.length > 0 ? (
+        {isDecksLoading ? (
+          <div className="mt-10 rounded-2xl border border-border bg-primary-grey/50 px-6 py-12">
+            <div className="flex min-h-40 items-center justify-center">
+              <div className="flex items-center gap-3 rounded-full border border-border bg-background px-4 py-3 shadow-sm">
+                <Spinner className="h-5 w-5" />
+                <span className="type-body text-fg">
+                  Loading discoverable decks…
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!isDecksLoading && mine.length > 0 ? (
           <section className="mt-10">
             <h2 className="type-title text-fg">Your Public Decks</h2>
             <p className="type-caption mt-1 text-primary-light-grey">
@@ -123,22 +141,24 @@ export default function DiscoveryPage() {
           </section>
         ) : null}
 
-        <section className={mine.length > 0 ? "mt-12" : "mt-10"}>
-          <h2 className="type-title text-fg">From Other Learners</h2>
-          {others.length === 0 && !decksError ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-border bg-primary-grey/50 px-6 py-12 text-center">
-              <p className="type-body text-primary-light-grey">
-                No shared decks from other users yet.
-              </p>
-            </div>
-          ) : (
-            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {others.map((deck) => (
-                <DeckCard key={deck.id} deckData={deck} isDiscoveryPage />
-              ))}
-            </div>
-          )}
-        </section>
+        {!isDecksLoading ? (
+          <section className={mine.length > 0 ? "mt-12" : "mt-10"}>
+            <h2 className="type-title text-fg">From Other Learners</h2>
+            {others.length === 0 && !decksError ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-border bg-primary-grey/50 px-6 py-12 text-center">
+                <p className="type-body text-primary-light-grey">
+                  No shared decks from other users yet.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {others.map((deck) => (
+                  <DeckCard key={deck.id} deckData={deck} isDiscoveryPage />
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
       </PageShell>
     </div>
   );
