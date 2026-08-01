@@ -8,22 +8,6 @@ from routers.study import create_new_study_session
 from conftest import user_id
 from models import Card, CardReviewRequest, Deck
 
-
-
-
-
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
-
-
-
-
-
-
-
-
-
 async def test_study_create_new_study_session(session: AsyncSession, client: AsyncClient):
   deck = Deck(
     user_id=user_id,
