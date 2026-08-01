@@ -87,7 +87,7 @@ class PushSubscription(Base):
 class Settings(Base):
   __tablename__ = "settings"
 
-  id: Mapped[int | None] = mapped_column(primary_key=True)
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
   user_id: Mapped[str] = mapped_column(unique=True)
   notification_time: Mapped[time]
   deck_notification_condition_enabled: Mapped[bool]
@@ -251,22 +251,26 @@ class CardReviewResponse(APISchema):
   interval: int
   next_review_date: datetime
   mastery: float
-  cards_left: bool
+  cards_left: int
 
 class StudySessionResponse(APISchema):
   deck_id: int
   cards: list["StudySessionCardResponse"]
   index: int
   page: Literal["cards", "results"]
+  total_cards_in_deck: int
   mastery: float
   old_mastery: float
-  cards_left: bool
+  cards_left: int
 
 class StudySessionCardResponse(APISchema):
   id: int
   question: str
   answer: str
   rating: Literal["red", "yellow", "green"] | None
+  mastery_change_on_red: float
+  mastery_change_on_yellow: float
+  mastery_change_on_green: float
 
 class CompleteStudySessionResponse(APISchema):
   success: bool

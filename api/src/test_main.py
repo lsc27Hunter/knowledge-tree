@@ -1,36 +1,12 @@
-# https://fastapi.tiangolo.com/tutorial/testing
-# https://fastapi.tiangolo.com/advanced/testing-dependencies
-# https://fastapi.tiangolo.com/advanced/async-tests
-# https://sqlmodel.tiangolo.com/tutorial/fastapi/tests
-
 from datetime import datetime, timedelta
 import json
-import os
 
-import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from testcontainers.postgres import PostgresContainer
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Override environment variables to prevent crashing when env is imported.
-os.environ["DATABASE_URL"] = "postgresql://"
-os.environ["CLERK_SECRET_KEY"] = "test_clerk_secret_key"
-os.environ["VAPID_PRIVATE_KEY"] = "test_vapid_private_key"
-os.environ["NOTIFICATIONS_SECRET"] = "test_notifications_secret"
-
-from auth import get_current_user_id
-from db import get_session
-from main import app
-
-from models import Base, Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate, UserStudyDay
-
-from routers.notifications import check_notifications_secret
-
-
-user_id = "test_user_id"
-
-# Tests
+from conftest import user_id
+from models import Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate, UserStudyDay
 
 async def test_get_decks(session: AsyncSession, client: AsyncClient):
   decks = [
@@ -347,7 +323,7 @@ async def test_study(session: AsyncSession, client: AsyncClient):
   assert data["page"] == "cards"
   assert data["mastery"] == 0
   assert data["oldMastery"] == 0
-  assert data["cardsLeft"] == 1
+  assert data["cardsLeft"] == 0
 
 
 async def test_get_streak_defaults(client: AsyncClient):
@@ -441,70 +417,3 @@ async def test_get_streak_counts_consecutive_qualifying_days(session: AsyncSessi
   assert data["todayReviewsCount"] == 3
   assert data["todayUniqueCardsCount"] == 3
   assert data["qualifiesToday"] == True
-
-# Fixtures
-
-# https://anyio.readthedocs.io/en/stable/testing.html#using-async-fixtures-with-higher-scopes
-@pytest.fixture(scope="session")
-def anyio_backend():
-  return "asyncio"
-
-# Initialize and connect to postgres running in Docker.
-@pytest.fixture(name="engine", scope="session")
-async def engine_fixture():
-  with PostgresContainer("postgres:16", driver="asyncpg") as postgres:
-    engine = create_async_engine(postgres.get_connection_url())
-    async with engine.begin() as conn:
-      await conn.run_sync(Base.metadata.create_all)
-      
-    yield engine
-
-# Provide a session that rolls back database changes after each test.
-# https://docs.sqlalchemy.org/en/21/orm/session_transaction.html#joining-a-session-into-an-external-transaction-such-as-for-test-suites
-@pytest.fixture(name="session")
-async def session_fixture(engine: AsyncEngine):
-  async with engine.connect() as connection:
-    transaction = await connection.begin()
-    
-    async with AsyncSession(
-      bind=connection,
-      join_transaction_mode="create_savepoint",
-
-      # Ensure database model data sticks around even after committing so we
-      # can check it in tests.
-      expire_on_commit=False,
-    ) as session:
-      yield session
-    
-    await transaction.rollback()
-
-@pytest.fixture(name="client")
-async def client_fixture(session: AsyncSession, monkeypatch: pytest.MonkeyPatch):
-  def get_session_override():
-    return session
-
-  def get_current_user_id_override():
-    return user_id
-
-  def check_notifications_secret_override():
-    return None
-
-  # Deck list/detail pull creator names from Clerk — stub it in tests.
-  monkeypatch.setattr(
-    "main.get_clerk_user_profile",
-    lambda _uid: {
-      "username": "tester",
-      "first_name": "Test",
-      "last_name": "User",
-    },
-  )
-
-  app.dependency_overrides[get_session] = get_session_override
-  app.dependency_overrides[get_current_user_id] = get_current_user_id_override
-  app.dependency_overrides[check_notifications_secret] = check_notifications_secret_override
-  
-  transport = ASGITransport(app=app)
-  async with AsyncClient(transport=transport, base_url="http://test") as client:
-    yield client
-  
-  app.dependency_overrides.clear()
