@@ -1,6 +1,6 @@
 # Study session endpoints: SM-2 reviews and deck mastery.
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from random import shuffle
 from typing import Annotated, Any, Literal, Sequence, cast
 
@@ -18,15 +18,18 @@ from models import (
   CompleteStudySessionResponse,
   Deck,
   DeckMasteryResponse,
+  StreakResponse,
   StudySessionCard,
   StudySession,
   StudySessionCardResponse,
   StudySessionResponse,
+  UserStudyDay,
 )
 from utils.mastery import calculate_deck_mastery, card_mastery
 from utils.sm2 import calculate_sm2, rating_to_quality
 
 router = APIRouter(tags=["study"])
+MINIMUM_CARDS_PER_DAY = 3
 
 @router.post("/api/decks/{deckId}/study", response_model=StudySessionResponse)
 async def study(
@@ -222,9 +225,16 @@ async def review_card(
   card.easiness_factor = result.easiness
   card.interval = result.interval
   card.next_review_date = result.next_review_date
-  deck.last_studied_at = datetime.utcnow()
+  reviewed_at = datetime.utcnow()
+  deck.last_studied_at = reviewed_at
 
   study_session_card.rating = body.rating
+
+  await update_user_study_day(
+    session=session,
+    user_id=user_id,
+    reviewed_at=reviewed_at,
+  )
 
   await session.flush()
 
@@ -242,6 +252,49 @@ async def review_card(
     next_review_date=card.next_review_date,
     mastery=mastery,
     cards_left=cards_left,
+  )
+
+
+@router.get("/api/me/streak", response_model=StreakResponse)
+async def get_streak(
+  session: SessionDep,
+  user_id: CurrentUserId,
+):
+  today = datetime.utcnow().date()
+  today_row = (await session.execute(
+    select(UserStudyDay).where(
+      UserStudyDay.user_id == user_id,
+      UserStudyDay.study_date == today,
+    )
+  )).scalar_one_or_none()
+
+  today_reviews_count = 0
+  today_unique_cards_count = 0
+  qualifies_today = False
+  if today_row is not None:
+    today_reviews_count = today_row.reviews_count
+    today_unique_cards_count = today_row.unique_cards_count
+    qualifies_today = today_row.qualifies_for_streak
+
+  qualifying_days = list((await session.execute(
+    select(UserStudyDay.study_date)
+    .where(
+      UserStudyDay.user_id == user_id,
+      UserStudyDay.qualifies_for_streak.is_(True),
+    )
+    .order_by(UserStudyDay.study_date.asc())
+  )).scalars().all())
+
+  current_streak = _calculate_current_streak_with_grace(qualifying_days, today)
+  longest_streak = _calculate_longest_streak(qualifying_days)
+
+  return StreakResponse(
+    current_streak=current_streak,
+    longest_streak=longest_streak,
+    today_reviews_count=today_reviews_count,
+    today_unique_cards_count=today_unique_cards_count,
+    minimum_cards_per_day=MINIMUM_CARDS_PER_DAY,
+    qualifies_today=qualifies_today,
   )
 
 @router.delete("/api/decks/{deckId}/complete", response_model=CompleteStudySessionResponse)
@@ -301,3 +354,76 @@ def get_cards_left(cards: Sequence[Card]) -> int:
     if card.next_review_date <= datetime.utcnow():
       count += 1
   return count
+
+
+async def update_user_study_day(
+  session: SessionDep,
+  user_id: str,
+  reviewed_at: datetime,
+):
+  # Uses UTC day boundaries for now; this can be switched to user local timezone later.
+  study_date = reviewed_at.date()
+  row = (await session.execute(
+    select(UserStudyDay).where(
+      UserStudyDay.user_id == user_id,
+      UserStudyDay.study_date == study_date,
+    )
+  )).scalar_one_or_none()
+
+  if row is None:
+    row = UserStudyDay(
+      user_id=user_id,
+      study_date=study_date,
+      reviews_count=1,
+      unique_cards_count=1,
+      qualifies_for_streak=MINIMUM_CARDS_PER_DAY <= 1,
+      first_reviewed_at_utc=reviewed_at,
+      last_reviewed_at_utc=reviewed_at,
+    )
+    session.add(row)
+    return
+
+  row.reviews_count += 1
+  row.unique_cards_count += 1
+  row.last_reviewed_at_utc = reviewed_at
+  if row.first_reviewed_at_utc is None:
+    row.first_reviewed_at_utc = reviewed_at
+  if row.unique_cards_count >= MINIMUM_CARDS_PER_DAY:
+    row.qualifies_for_streak = True
+
+
+def _calculate_current_streak_with_grace(qualifying_days: Sequence[date], today: date) -> int:
+  if not qualifying_days:
+    return 0
+
+  qualifying_set = set(qualifying_days)
+  anchor = None
+  if today in qualifying_set:
+    anchor = today
+  elif (today - timedelta(days=1)) in qualifying_set:
+    anchor = today - timedelta(days=1)
+  if anchor is None:
+    return 0
+
+  streak = 0
+  cursor = anchor
+  while cursor in qualifying_set:
+    streak += 1
+    cursor = cursor - timedelta(days=1)
+  return streak
+
+
+def _calculate_longest_streak(qualifying_days: Sequence[date]) -> int:
+  if not qualifying_days:
+    return 0
+
+  longest = 1
+  current = 1
+  for i in range(1, len(qualifying_days)):
+    if qualifying_days[i] - qualifying_days[i - 1] == timedelta(days=1):
+      current += 1
+      if current > longest:
+        longest = current
+    else:
+      current = 1
+  return longest

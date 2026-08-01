@@ -2,3 +2,10 @@
 .vscode
 .vsls.json
 node_modules
+testdata
+.venv
+**/__pycache__/
+.pytest_cache
+dist
+*.egg-info
+*.log

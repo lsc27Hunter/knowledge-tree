@@ -1,11 +1,13 @@
 # Database models and API schemas.
+from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time, date
+
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -20,7 +22,8 @@ class Deck(Base):
   description: Mapped[str]
   due_date: Mapped[Optional[datetime]]
   last_studied_at: Mapped[Optional[datetime]]
-  cards: Mapped[List["Card"]] = relationship(init=False, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
+  discoverable: Mapped[bool] = mapped_column(default=False)
+  cards: Mapped[List["Card"]] = relationship(default_factory=list, back_populates="deck", cascade="all, delete-orphan", passive_deletes=True)
   study_session: Mapped[Optional["StudySession"]] = relationship(init=False)
 
 class Card(Base):
@@ -57,6 +60,44 @@ class StudySessionCard(Base):
   card: Mapped["Card"] = relationship(back_populates="study_session_card", init=False)
   study_session: Mapped["StudySession"] = relationship(back_populates="cards", init=False)
 
+class UserStudyDay(Base):
+  __tablename__ = "user_study_day"
+  __table_args__ = (UniqueConstraint("user_id", "study_date"),)
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  user_id: Mapped[str]
+  study_date: Mapped[date]
+  reviews_count: Mapped[int] = mapped_column(default=0)
+  unique_cards_count: Mapped[int] = mapped_column(default=0)
+  qualifies_for_streak: Mapped[bool] = mapped_column(default=False)
+  first_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
+  last_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
+class PushSubscription(Base):
+  __tablename__ = "push_subscription"
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  settings_id: Mapped[int] = mapped_column(ForeignKey("settings.id", ondelete="CASCADE"))
+  host: Mapped[str]
+  endpoint: Mapped[str]
+  keys_p256dh: Mapped[str]
+  keys_auth: Mapped[str]
+
+  __table_args__ = (UniqueConstraint('endpoint', 'keys_p256dh', 'keys_auth'),)
+
+class Settings(Base):
+  __tablename__ = "settings"
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  user_id: Mapped[str] = mapped_column(unique=True)
+  notification_time: Mapped[time]
+  deck_notification_condition_enabled: Mapped[bool]
+  deck_notification_condition_cards: Mapped[int]
+  deck_notification_condition_days: Mapped[int]
+  card_notification_condition_enabled: Mapped[bool]
+  card_notification_condition_days: Mapped[int]
+  streak_notification_condition_enabled: Mapped[bool]
+  streak_notification_condition_days: Mapped[int]
+
 # Translates camelCase request fields to snake_case.
 # Translates snake_case response fields to camelCase.
 class APISchema(BaseModel):
@@ -69,12 +110,16 @@ class APISchema(BaseModel):
 
 class DeckListResponse(APISchema):
   id: int
+  creator_user_id: str
+  creator_username: str | None
+  creator_display_name: str
   name: str
   description: str | None
   due_date: datetime | None
   mastery: int
   cards_due_today: int
   next_review_date: datetime | None
+  discoverable: bool
   total_cards: int
   last_studied_at: datetime | None
   active_study_session: bool
@@ -90,15 +135,18 @@ class DeckCreate(APISchema):
   last_studied_at: datetime | None = None
   mastery: int = 0
   cards: list[CardCreate] = Field(min_length=1)
+  discoverable: bool = False
 
 class DeckCreateResponse(APISchema):
   id: int
   name: str
   description: str
+  discoverable: bool
 
 class DeckUpdate(APISchema):
   name: str
   description: str
+  discoverable: bool = False
   due_date: datetime | None
   cards: list["CardDeckUpdate"] = Field(min_length=1)
 
@@ -111,12 +159,17 @@ class DeckUpdateResponse(APISchema):
   id: int
   name: str
   description: str
+  discoverable: bool
   due_date: datetime | None
 
 class DeckGetResponse(APISchema):
   id: int
+  creator_user_id: str
+  creator_username: str | None
+  creator_display_name: str
   name: str
   description: str
+  discoverable: bool
   due_date: datetime | None
   cards: list["CardDeckGetResponse"]
   mastery: int
@@ -139,6 +192,30 @@ class DeckUploadResponse(APISchema):
   deck_id: int
   cards_created: int
   message: str
+
+class DeckMergeStats(APISchema):
+  added: int
+  updated: int
+  unchanged: int
+
+class DeckMergeResponse(APISchema):
+  message: str
+  stats: DeckMergeStats
+
+class DeckMergeChange(APISchema):
+  key: str
+  kind: Literal["added", "updated", "unchanged"]
+  question: str
+  old_answer: str | None = None
+  new_answer: str
+
+class DeckMergePreviewResponse(APISchema):
+  changes: list[DeckMergeChange]
+  stats: DeckMergeStats
+
+class DeckMergeApplyRequest(APISchema):
+  # Accepted add/update rows from the merge preview UI.
+  rows: list[CardCreate] = Field(min_length=1)
 
 class CardListResponse(APISchema):
   id: int
@@ -197,3 +274,120 @@ class StudySessionCardResponse(APISchema):
 
 class CompleteStudySessionResponse(APISchema):
   success: bool
+
+
+class StreakResponse(APISchema):
+  current_streak: int
+  longest_streak: int
+  today_reviews_count: int
+  today_unique_cards_count: int
+  minimum_cards_per_day: int
+  qualifies_today: bool
+class SettingsGet(APISchema):
+  push_subscription: "PushSubscriptionData | None"
+
+class SettingsGetResponse(APISchema):
+  is_subscribed: bool
+  notification_time: time | None
+  notification_conditions: NotificationConditions
+
+class SendTestNotification(APISchema):
+  push_subscription: PushSubscriptionData
+  notification_conditions: NotificationConditionsDefaults
+
+class SettingsUpdate(APISchema):
+  notifications_enabled: bool
+  push_subscription: PushSubscriptionData | None
+  notification_time: time
+  notification_conditions: NotificationConditionsDefaults
+
+class SettingsUpdateResponse(APISchema):
+  push_subscription_result: Literal["enabled", "deleted", "nothing to delete"]
+
+class DeckNotificationCondition(APISchema):
+  enabled: bool
+  cards: int
+  days: int
+
+  @staticmethod
+  def from_settings(settings: Settings) -> DeckNotificationCondition:
+    return DeckNotificationCondition(
+      enabled=settings.deck_notification_condition_enabled,
+      days=settings.deck_notification_condition_days,
+      cards=settings.deck_notification_condition_cards,
+    )
+
+class DeckNotificationConditionDefaults(DeckNotificationCondition):
+  enabled: bool = True
+  cards: int = 10
+  days: int = 1
+
+class CardNotificationCondition(APISchema):
+  enabled: bool
+  days: int
+
+  @staticmethod
+  def from_settings(settings: Settings) -> CardNotificationCondition:
+    return CardNotificationCondition(
+      enabled=settings.card_notification_condition_enabled,
+      days=settings.card_notification_condition_days,
+    )
+
+class CardNotificationConditionDefaults(CardNotificationCondition):
+  enabled: bool = True
+  days: int = 3
+
+class StreakNotificationCondition(APISchema):
+  enabled: bool
+  days: int
+
+  @staticmethod
+  def from_settings(settings: Settings) -> StreakNotificationCondition:
+    return StreakNotificationCondition(
+      enabled=settings.streak_notification_condition_enabled,
+      days=settings.streak_notification_condition_days,
+    )
+
+class StreakNotificationConditionDefaults(StreakNotificationCondition):
+  enabled: bool = True
+  days: int = 3
+
+class NotificationConditions(APISchema):
+  deck: DeckNotificationCondition
+  card: CardNotificationCondition
+  streak: StreakNotificationCondition
+
+  @staticmethod
+  def from_settings(settings: Settings) -> NotificationConditions:
+    return NotificationConditions(
+      deck=DeckNotificationCondition.from_settings(settings),
+      card=CardNotificationCondition.from_settings(settings),
+      streak=StreakNotificationCondition.from_settings(settings),
+    )
+
+class NotificationConditionsDefaults(NotificationConditions):
+  deck: DeckNotificationCondition = DeckNotificationConditionDefaults()
+  card: CardNotificationCondition = CardNotificationConditionDefaults()
+  streak: StreakNotificationCondition = StreakNotificationConditionDefaults()
+
+class PushSubscriptionData(APISchema):
+  endpoint: str
+  keys: PushSubscriptionKeys
+
+  @staticmethod
+  def from_db(x: PushSubscription) -> PushSubscriptionData:
+    return PushSubscriptionData(
+      endpoint=x.endpoint,
+      keys=PushSubscriptionKeys(
+        p256dh=x.keys_p256dh,
+        auth=x.keys_auth,
+      ),
+    )
+
+class PushSubscriptionKeys(APISchema):
+  p256dh: str = Field(alias="p256dh")
+  auth: str
+
+class SendNotificationsResponse(APISchema):
+  sent: int
+  expired_or_invalid: int

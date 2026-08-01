@@ -7,11 +7,48 @@ from fastapi import FastAPI, Form, HTTPException, Path, UploadFile
 from fastapi.routing import APIRoute
 from sqlalchemy import CursorResult, delete, select
 from sqlalchemy.orm import joinedload, selectinload
-from auth import CurrentUserId
+from auth import CurrentUserId, get_clerk_user_profile
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeckGetResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUpdate, DeckUpdateResponse, DeckUploadResponse
+from routers.notifications import router as notifications_router
+from routers.settings import router as settings_router
 from routers.study import router as study_router
+from routers.decks import router as decks_router
 from utils.mastery import calculate_deck_mastery, card_mastery
+
+
+def _creator_metadata(user_id: str) -> dict[str, str | None]:
+  # Fall back if Clerk is down so deck list/detail still work.
+  try:
+    profile = get_clerk_user_profile(user_id)
+  except Exception:
+    return {
+      "creator_user_id": user_id,
+      "creator_username": None,
+      "creator_display_name": user_id,
+    }
+
+  username = profile.get("username")
+  first_name = profile.get("first_name")
+  last_name = profile.get("last_name")
+  display_name = (
+    username
+    or " ".join(part for part in [first_name, last_name] if part).strip()
+    or user_id
+  )
+  return {
+    "creator_user_id": user_id,
+    "creator_username": username,
+    "creator_display_name": display_name,
+  }
+
+
+def _parse_form_bool(value: str | bool) -> bool:
+  # Multipart forms often send "true"/"false" as strings.
+  if isinstance(value, bool):
+    return value
+  normalized = value.strip().lower()
+  return normalized in {"1", "true", "on", "yes"}
 
 # For generating openapi.json.
 # https://fastapi.tiangolo.com/advanced/generate-clients/#custom-generate-unique-id-function
@@ -29,6 +66,9 @@ app = FastAPI(
 )
 
 app.include_router(study_router)
+app.include_router(notifications_router)
+app.include_router(settings_router)
+app.include_router(decks_router)
 
 
 @app.get("/")
@@ -44,14 +84,22 @@ async def get_me(user_id: CurrentUserId):
   return {"userId": user_id}
 
 @app.get("/api/decks", response_model=list[DeckListResponse])
-async def get_decks(session: SessionDep, user_id: CurrentUserId):
-  decks = (await session.execute(
+async def get_decks(
+  session: SessionDep,
+  user_id: CurrentUserId,
+  discoverable: bool | None = None,
+):
+  query = (
     select(Deck)
     .options(selectinload(Deck.cards), joinedload(Deck.study_session))
     .where(Deck.user_id == user_id)
-  )).scalars().all()
+  )
+  if discoverable is not None:
+    query = query.where(Deck.discoverable == discoverable)
+  decks = (await session.execute(query)).scalars().all()
   responses: list[DeckListResponse] = []
   for deck in decks:
+    creator = _creator_metadata(deck.user_id)
     cards = deck.cards
     study_session = deck.study_session
     now = datetime.utcnow()
@@ -62,8 +110,10 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
     responses.append(
       DeckListResponse(
         id=deck.id,
+        **creator,
         name=deck.name,
         description=deck.description,
+        discoverable=deck.discoverable,
         due_date=deck.due_date,
         last_studied_at=deck.last_studied_at,
         mastery=int(round(calculate_deck_mastery(cards))),
@@ -75,12 +125,89 @@ async def get_decks(session: SessionDep, user_id: CurrentUserId):
     )
   return responses
 
+@app.get("/api/discovery/decks", response_model=list[DeckListResponse])
+async def get_discoverable_decks(session: SessionDep):
+  decks = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards))
+    .where(Deck.discoverable == True)
+  )).scalars().all()
+  responses: list[DeckListResponse] = []
+  for deck in decks:
+    creator = _creator_metadata(deck.user_id)
+    cards = deck.cards
+    now = datetime.utcnow()
+    if len(cards) == 0:
+      next_review_date = None
+    else:
+      next_review_date = min([c.next_review_date for c in cards])
+    responses.append(
+      DeckListResponse(
+        id=deck.id,
+        **creator,
+        name=deck.name,
+        description=deck.description,
+        discoverable=deck.discoverable,
+        due_date=deck.due_date,
+        last_studied_at=deck.last_studied_at,
+        mastery=int(round(calculate_deck_mastery(cards))),
+        cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+        next_review_date=next_review_date,
+        total_cards=len(cards),
+        active_study_session=False,
+      )
+    )
+  return responses
+
+@app.get("/api/discovery/decks/{deckId}", response_model=DeckGetResponse)
+async def get_discoverable_deck(
+  deck_id: Annotated[int, Path(alias="deckId")],
+  session: SessionDep,
+):
+  deck = (await session.execute(
+    select(Deck)
+    .options(selectinload(Deck.cards))
+    .where(Deck.id == deck_id)
+  )).scalar_one_or_none()
+  if not deck or not deck.discoverable:
+    raise HTTPException(status_code=404, detail="Deck not found")
+
+  cards = deck.cards
+  creator = _creator_metadata(deck.user_id)
+  now = datetime.utcnow()
+  if len(cards) == 0:
+    next_review_date = None
+  else:
+    next_review_date = min([c.next_review_date for c in cards])
+
+  mastery = calculate_deck_mastery(cards)
+  return DeckGetResponse(
+    id=deck.id,
+    **creator,
+    name=deck.name,
+    description=deck.description,
+    discoverable=deck.discoverable,
+    due_date=deck.due_date,
+    cards=[
+      CardDeckGetResponse(
+        id=card.id,
+        question=card.question,
+        answer=card.answer,
+      ) for card in cards
+    ],
+    mastery=int(round(mastery)),
+    cards_due_today=sum(1 for c in cards if c.next_review_date <= now),
+    total_cards=len(cards),
+    retention_rate=int(round(mastery)),
+  )
+
 @app.post("/api/decks", response_model=DeckCreateResponse)
 async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUserId):
   db_deck = Deck(
     user_id=user_id,
     name=deck.name,
     description=deck.description,
+    discoverable=deck.discoverable,
     due_date=deck.due_date,
     last_studied_at=deck.last_studied_at,
   )
@@ -103,6 +230,7 @@ async def create_deck(deck: DeckCreate, session: SessionDep, user_id: CurrentUse
     id=db_deck.id,
     name=db_deck.name,
     description=db_deck.description,
+    discoverable=db_deck.discoverable,
   )
 
 @app.patch("/api/decks/{deckId}", response_model=DeckUpdateResponse)
@@ -121,17 +249,28 @@ async def update_deck(
     raise HTTPException(status_code=404, detail="Deck not found")
   db_deck.name = deck.name
   db_deck.description = deck.description
+  db_deck.discoverable = deck.discoverable
   db_deck.due_date = deck.due_date
   new_cards: list[Card] = []
   for card in deck.cards:
-    new_card = Card(
-      deck_id=deck_id,
-      question=card.question,
-      answer=card.answer,
-    )
-    if card.id is not None:
-      new_card.id = card.id
-    new_cards.append(new_card)
+    if card.id is None:
+      db_card = Card(
+        deck_id=deck_id,
+        question=card.question,
+        answer=card.answer,
+      )
+      new_cards.append(db_card)
+    else:
+      existing_card = None
+      for db_card in db_deck.cards:
+        if db_card.id == card.id:
+          existing_card = db_card
+          break
+      if existing_card is None:
+          raise HTTPException(status_code=404, detail="Card not found")
+      existing_card.question = card.question
+      existing_card.answer = card.answer
+      new_cards.append(existing_card)
   db_deck.cards = new_cards
     
   await session.commit()
@@ -140,6 +279,7 @@ async def update_deck(
     id=db_deck.id,
     name=db_deck.name,
     description=db_deck.description,
+    discoverable=db_deck.discoverable,
     due_date=db_deck.due_date,
   )
 
@@ -153,12 +293,15 @@ async def get_deck(
   if not deck or deck.user_id != user_id:
     raise HTTPException(status_code=404, detail="Deck not found")
   cards = (await session.execute(select(Card).where(Card.deck_id == deck_id))).scalars().all()
+  creator = _creator_metadata(deck.user_id)
   now = datetime.utcnow()
   mastery = calculate_deck_mastery(cards)
   return DeckGetResponse(
     id=deck.id,
+    **creator,
     name=deck.name,
     description=deck.description,
+    discoverable=deck.discoverable,
     due_date=deck.due_date,
     cards=[
       CardDeckGetResponse(
@@ -194,12 +337,14 @@ async def upload_deck(
   user_id: CurrentUserId,
   due_date: Annotated[str | None, Form(alias="dueDate")] = None,
   description: Annotated[str, Form()] = "",
+  discoverable: Annotated[str, Form()] = "false",
 ):
   parsed_due_date = (
     datetime.fromisoformat(due_date)
     if due_date
     else None
   )
+  is_discoverable = _parse_form_bool(discoverable)
 
   db_deck = Deck(
     user_id=user_id,
@@ -207,6 +352,7 @@ async def upload_deck(
     description=description,
     last_studied_at=None,
     due_date=parsed_due_date,
+    discoverable=is_discoverable,
   )
 
   session.add(db_deck)

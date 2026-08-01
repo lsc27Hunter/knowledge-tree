@@ -8,6 +8,22 @@ from routers.study import create_new_study_session
 from conftest import user_id
 from models import Card, CardReviewRequest, Deck
 
+
+
+
+
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+
+
+
+
+
+
+
+
+
 async def test_study_create_new_study_session(session: AsyncSession, client: AsyncClient):
   deck = Deck(
     user_id=user_id,
@@ -43,7 +59,7 @@ async def test_study_create_new_study_session(session: AsyncSession, client: Asy
   assert data["page"] == "cards"
   assert data["mastery"] == 0
   assert data["oldMastery"] == 0
-  assert data["cardsLeft"] == True
+  assert data["cardsLeft"] == 0
 
 async def test_review_card(session: AsyncSession, client: AsyncClient):
   deck = Deck(
@@ -55,6 +71,7 @@ async def test_review_card(session: AsyncSession, client: AsyncClient):
   )
   session.add(deck)
   await session.commit()
+  await session.refresh(deck)
 
   card = Card(
     deck_id=deck.id,

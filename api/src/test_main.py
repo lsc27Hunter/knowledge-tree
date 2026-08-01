@@ -1,10 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
-from conftest import user_id
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from models import Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate
+
+from conftest import user_id
+from models import Card, CardCreate, CardDeckUpdate, CardUpdate, Deck, DeckUpdate, UserStudyDay
 
 async def test_get_decks(session: AsyncSession, client: AsyncClient):
   decks = [
@@ -47,6 +49,8 @@ async def test_get_decks(session: AsyncSession, client: AsyncClient):
     assert matched["cardsDueToday"] == 0
     assert matched["totalCards"] == 0
     assert matched["activeStudySession"] == False
+    assert matched["creatorUserId"] == user_id
+    assert matched["creatorDisplayName"] is not None
 
 async def test_create_deck(client: AsyncClient):
   response = await client.post(
@@ -107,6 +111,7 @@ async def test_update_deck(session: AsyncSession, client: AsyncClient):
   deck = DeckUpdate(
     name="new name",
     description="new description",
+    discoverable=True,
     due_date=datetime.now(),
     cards=[
       CardDeckUpdate(
@@ -125,6 +130,7 @@ async def test_update_deck(session: AsyncSession, client: AsyncClient):
   assert response.status_code == 200
   assert data["name"] == deck.name
   assert data["description"] == deck.description
+  assert data["discoverable"] is True
   assert data["dueDate"] == None if deck.due_date is None else deck.due_date.isoformat()
   assert data["id"] == deck_id
 
@@ -281,3 +287,133 @@ async def test_delete_card(session: AsyncSession, client: AsyncClient):
   assert response.status_code == 200
   assert data["success"] == True
   assert card_in_db is None
+
+async def test_study(session: AsyncSession, client: AsyncClient):
+  deck = Deck(
+    user_id=user_id,
+    name="test name",
+    description="test description",
+    last_studied_at=None,
+    due_date=datetime.now()
+  )
+  session.add(deck)
+  await session.commit()
+
+  card = Card(
+    deck_id=deck.id,
+    question="test question",
+    answer="test answer",
+  )
+  session.add(card)
+  await session.commit()
+
+  response = await client.post(
+    f"/api/decks/{deck.id}/study",
+  )
+
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["deckId"] == deck.id
+  assert len(data["cards"]) == 1
+  assert data["cards"][0]["question"] == card.question
+  assert data["cards"][0]["answer"] == card.answer
+  assert data["cards"][0]["rating"] is None
+  assert data["index"] == 0
+  assert data["page"] == "cards"
+  assert data["mastery"] == 0
+  assert data["oldMastery"] == 0
+  assert data["cardsLeft"] == 0
+
+
+async def test_get_streak_defaults(client: AsyncClient):
+  response = await client.get("/api/me/streak")
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["currentStreak"] == 0
+  assert data["longestStreak"] == 0
+  assert data["todayReviewsCount"] == 0
+  assert data["todayUniqueCardsCount"] == 0
+  assert data["minimumCardsPerDay"] == 3
+  assert data["qualifiesToday"] == False
+
+
+async def test_review_card_updates_streak(session: AsyncSession, client: AsyncClient):
+  deck = Deck(
+    user_id=user_id,
+    name="test name",
+    description="test description",
+    last_studied_at=None,
+    due_date=datetime.now()
+  )
+  session.add(deck)
+  await session.commit()
+
+  for i in range(3):
+    session.add(Card(
+      deck_id=deck.id,
+      question=f"question{i}",
+      answer=f"answer{i}",
+    ))
+  await session.commit()
+
+  study_response = await client.post(f"/api/decks/{deck.id}/study")
+  study_data = study_response.json()
+  assert study_response.status_code == 200
+
+  for study_card in study_data["cards"]:
+    review_response = await client.post(
+      f"/api/cards/{study_card['id']}/review",
+      json={"rating": "green"},
+    )
+    assert review_response.status_code == 200
+
+  row_count = (await session.execute(select(UserStudyDay))).scalars().all()
+  assert len(row_count) == 1
+  assert row_count[0].reviews_count == 3
+  assert row_count[0].unique_cards_count == 3
+  assert row_count[0].qualifies_for_streak == True
+
+  streak_response = await client.get("/api/me/streak")
+  streak_data = streak_response.json()
+
+  assert streak_response.status_code == 200
+  assert streak_data["todayReviewsCount"] == 3
+  assert streak_data["todayUniqueCardsCount"] == 3
+  assert streak_data["qualifiesToday"] == True
+  assert streak_data["currentStreak"] == 1
+  assert streak_data["longestStreak"] == 1
+
+
+async def test_get_streak_counts_consecutive_qualifying_days(session: AsyncSession, client: AsyncClient):
+  today = datetime.utcnow().date()
+  yesterday = today - timedelta(days=1)
+
+  session.add_all([
+    UserStudyDay(
+      user_id=user_id,
+      study_date=today,
+      reviews_count=3,
+      unique_cards_count=3,
+      qualifies_for_streak=True,
+    ),
+    UserStudyDay(
+      user_id=user_id,
+      study_date=yesterday,
+      reviews_count=3,
+      unique_cards_count=3,
+      qualifies_for_streak=True,
+    ),
+  ])
+  await session.commit()
+
+  response = await client.get("/api/me/streak")
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["currentStreak"] == 2
+  assert data["longestStreak"] == 2
+  assert data["todayReviewsCount"] == 3
+  assert data["todayUniqueCardsCount"] == 3
+  assert data["qualifiesToday"] == True

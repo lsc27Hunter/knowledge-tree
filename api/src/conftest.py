@@ -1,3 +1,5 @@
+# Test fixtures.
+
 # https://fastapi.tiangolo.com/tutorial/testing
 # https://fastapi.tiangolo.com/advanced/testing-dependencies
 # https://fastapi.tiangolo.com/advanced/async-tests
@@ -7,26 +9,26 @@ import os
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 # Override environment variables to prevent crashing when env is imported.
 os.environ["DATABASE_URL"] = "postgresql://"
 os.environ["CLERK_SECRET_KEY"] = "test_clerk_secret_key"
+os.environ["VAPID_PRIVATE_KEY"] = "test_vapid_private_key"
+os.environ["NOTIFICATIONS_SECRET"] = "test_notifications_secret"
 
 from auth import get_current_user_id
 from db import get_session
 from main import app
 from models import Base
+from routers.notifications import check_notifications_secret
+
 
 user_id = "test_user_id"
 
-# Fixtures
-
 # https://anyio.readthedocs.io/en/stable/testing.html#using-async-fixtures-with-higher-scopes
-import pytest
-
-
 @pytest.fixture(scope="session")
 def anyio_backend():
   return "asyncio"
@@ -61,15 +63,29 @@ async def session_fixture(engine: AsyncEngine):
     await transaction.rollback()
 
 @pytest.fixture(name="client")
-async def client_fixture(session: AsyncSession):
+async def client_fixture(session: AsyncSession, monkeypatch: pytest.MonkeyPatch):
   def get_session_override():
     return session
 
   def get_current_user_id_override():
     return user_id
 
+  def check_notifications_secret_override():
+    return None
+
+  # Deck list/detail pull creator names from Clerk — stub it in tests.
+  monkeypatch.setattr(
+    "main.get_clerk_user_profile",
+    lambda _uid: {
+      "username": "tester",
+      "first_name": "Test",
+      "last_name": "User",
+    },
+  )
+
   app.dependency_overrides[get_session] = get_session_override
   app.dependency_overrides[get_current_user_id] = get_current_user_id_override
+  app.dependency_overrides[check_notifications_secret] = check_notifications_secret_override
   
   transport = ASGITransport(app=app)
   async with AsyncClient(transport=transport, base_url="http://test") as client:
