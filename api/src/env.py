@@ -19,7 +19,11 @@ clerk_secret_key = os.environ['CLERK_SECRET_KEY']
 
 # Comma-separated list of allowed frontend origins (Clerk azp claim).
 _clerk_parties = os.getenv('CLERK_AUTHORIZED_PARTIES', 'http://localhost:5173')
-clerk_authorized_parties = [party.strip() for party in _clerk_parties.split(',') if party.strip()]
+clerk_authorized_parties = [
+  party.strip().strip('"').strip("'")
+  for party in _clerk_parties.split(',')
+  if party.strip().strip('"').strip("'")
+]
 
 # For web push notifications.
 vapid_private_key = os.environ['VAPID_PRIVATE_KEY']

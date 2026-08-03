@@ -60,12 +60,10 @@ def _decode_clerk_token(token: str, host: str | None) -> dict[str, Any]:
       signing_key,
       algorithms=["RS256"],
       options={"verify_aud": False},
-
-      # Add leeway so that tokens with an iat (issued at) that is just in the future
-      # won't be rejected, preventing jwt.exceptions.ImmatureSignatureError.
-      # https://github.com/jpadilla/pyjwt/issues/814
-      leeway=1,
+      leeway=5,
     )
+  except jwt.ExpiredSignatureError:
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
   except jwt.PyJWTError:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
@@ -74,6 +72,7 @@ def _decode_clerk_token(token: str, host: str | None) -> dict[str, Any]:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
   return payload
+
 
 @lru_cache(maxsize=256)
 def get_clerk_user_profile(user_id: str) -> dict[str, Any]:
@@ -85,21 +84,30 @@ def get_clerk_user_profile(user_id: str) -> dict[str, Any]:
   response.raise_for_status()
   return response.json()
 
-def _unauthorized_party(azp: Any | None, host: str | None):
-  # First check if the token matches an explicitly authorized party.
-  # Otherwise check if it matches the host, allowing Vercel preview deployments
-  # to be authorized.
-  return clerk_authorized_parties and azp not in clerk_authorized_parties and \
-    (host is None or "https://" + host != azp)
+
+def _unauthorized_party(azp: Any | None, host: str | None) -> bool:
+  if not clerk_authorized_parties:
+    return False
+  # Tokens without azp: don't reject on party alone.
+  if azp is None:
+    return False
+  if azp in clerk_authorized_parties:
+    return False
+  # Vite may rewrite Host; prefer X-Forwarded-Host from the proxy.
+  if host and azp in (f"http://{host}", f"https://{host}"):
+    return False
+  return True
+
 
 async def get_current_user_id(
   credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
   host: Annotated[str | None, Header()] = None,
+  x_forwarded_host: Annotated[str | None, Header()] = None,
 ) -> str:
   if credentials is None:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-  payload = _decode_clerk_token(credentials.credentials, host)
+  payload = _decode_clerk_token(credentials.credentials, x_forwarded_host or host)
   user_id = payload.get("sub")
   if not user_id:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
