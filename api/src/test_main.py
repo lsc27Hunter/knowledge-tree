@@ -417,3 +417,39 @@ async def test_get_streak_counts_consecutive_qualifying_days(session: AsyncSessi
   assert data["todayReviewsCount"] == 3
   assert data["todayUniqueCardsCount"] == 3
   assert data["qualifiesToday"] == True
+
+
+async def test_get_study_activity_returns_days_in_range(
+  session: AsyncSession, client: AsyncClient
+):
+  today = datetime.utcnow().date()
+  older = today - timedelta(days=3)
+  session.add_all([
+    UserStudyDay(
+      user_id=user_id,
+      study_date=older,
+      reviews_count=2,
+      unique_cards_count=2,
+      qualifies_for_streak=False,
+    ),
+    UserStudyDay(
+      user_id=user_id,
+      study_date=today,
+      reviews_count=8,
+      unique_cards_count=8,
+      qualifies_for_streak=True,
+    ),
+  ])
+  await session.commit()
+
+  response = await client.get("/api/me/study-activity?weeks=4")
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["fromDate"] <= older.isoformat()
+  assert data["toDate"] == today.isoformat()
+  assert len(data["days"]) == 2
+  by_date = {row["date"]: row for row in data["days"]}
+  assert by_date[older.isoformat()]["reviewsCount"] == 2
+  assert by_date[today.isoformat()]["reviewsCount"] == 8
+  assert by_date[today.isoformat()]["qualifiesForStreak"] is True
