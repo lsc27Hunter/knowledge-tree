@@ -19,17 +19,20 @@ import ArrowLeft from "../../assets/arrow-right.svg";
 import { useModalState } from "./Modal";
 
 interface NavbarProps {
-  version: "Landing" | "Dashboard" | "Discovery" | "Blank" | "Study";
+  version: "Landing" | "Dashboard" | "Discovery" | "Friends" | "Blank" | "Study";
   userButton?: ReactNode;
   onDeckCreated?: () => void;
 }
 
-// Desktop: Logo · Decks | Discover …… Create · theme · settings · user
+// Desktop: Logo · Decks | Discover | Friends …… Create · theme · settings · user
 // Mobile (<md): Logo …… Create · hamburger sheet
 export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
   const { isSignedIn } = useAuth();
   const homeTo = isSignedIn ? "/dashboard" : "/";
-  const showAppNav = version === "Dashboard" || version === "Discovery";
+  const showAppNav =
+    version === "Dashboard" ||
+    version === "Discovery" ||
+    version === "Friends";
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -67,6 +70,7 @@ export function Navbar({ version, userButton, onDeckCreated }: NavbarProps) {
           >
             <NavItem to="/dashboard" label="Decks" />
             <NavItem to="/discovery" label="Discover" />
+            <NavItem to="/friends" label="Friends" />
           </nav>
         ) : null}
 
@@ -221,6 +225,7 @@ function MobileMenu({
                   <nav aria-label="Primary" className="flex flex-col gap-1">
                     <MobileNavItem to="/dashboard" label="Decks" onNavigate={onClose} />
                     <MobileNavItem to="/discovery" label="Discover" onNavigate={onClose} />
+                    <MobileNavItem to="/friends" label="Friends" onNavigate={onClose} />
                   </nav>
                 ) : null}
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import {
@@ -35,6 +35,8 @@ import { ExportDeckButton, ExportDiscoverableDeckButton} from "./ExportDeckButto
 interface DeckCardProps {
   deckData: Deck;
   onChanged?: () => void;
+  /** Highlight that this deck belongs to a friend (Discover). */
+  fromFriend?: boolean;
 }
 
 export interface Deck {
@@ -56,8 +58,10 @@ export interface Deck {
 export function DeckCard({
   deckData,
   isDiscoveryPage = false,
+  fromFriend = false,
+  hideCreator = false,
   onChanged,
-}: DeckCardProps & { isDiscoveryPage?: boolean }) {
+}: DeckCardProps & { isDiscoveryPage?: boolean; hideCreator?: boolean }) {
   const previewModalState = useModalState();
   const deleteModalState = useModalState();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -186,14 +190,31 @@ export function DeckCard({
         )}
       </div>
 
-      {isDiscoveryPage ? (
-        <div className="mt-2 flex items-center justify-center gap-1 text-xsmall text-primary-light-grey">
-          Created by{" "}
-          <span className="text-fg-subtle">
-            {deckData.creatorDisplayName ??
-              deckData.creatorUsername ??
-              "Unknown"}
-          </span>
+      {isDiscoveryPage && !hideCreator ? (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-xsmall text-primary-light-grey">
+          <span>Created by</span>
+          {deckData.creatorUserId ? (
+            <Link
+              to={`/users/${deckData.creatorUserId}`}
+              className="font-medium text-fg underline-offset-2 hover:text-accent hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {deckData.creatorDisplayName ??
+                deckData.creatorUsername ??
+                "Unknown"}
+            </Link>
+          ) : (
+            <span className="text-fg-subtle">
+              {deckData.creatorDisplayName ??
+                deckData.creatorUsername ??
+                "Unknown"}
+            </span>
+          )}
+          {fromFriend ? (
+            <span className="rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-medium text-accent">
+              Friend
+            </span>
+          ) : null}
         </div>
       ) : null}
 
@@ -329,6 +350,12 @@ function PreviewContent({
                   deck.creatorUsername ??
                   "Unknown"
                 }
+                to={
+                  deck.creatorUserId
+                    ? `/users/${deck.creatorUserId}`
+                    : undefined
+                }
+                onNavigate={onClose}
               />
             </div>
             <ReadOnlyField
@@ -387,14 +414,34 @@ function PreviewContent({
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function ReadOnlyField({
+  label,
+  value,
+  to,
+  onNavigate,
+}: {
+  label: string;
+  value: string;
+  to?: string;
+  onNavigate?: () => void;
+}) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xsmall font-semibold text-primary-light-grey">
         {label}
       </span>
       <div className="rounded-lg border border-border bg-primary-grey px-3 py-2 text-small break-words text-fg [overflow-wrap:anywhere]">
-        {value}
+        {to ? (
+          <Link
+            to={to}
+            className="font-medium underline-offset-2 hover:text-accent hover:underline"
+            onClick={() => onNavigate?.()}
+          >
+            {value}
+          </Link>
+        ) : (
+          value
+        )}
       </div>
     </div>
   );

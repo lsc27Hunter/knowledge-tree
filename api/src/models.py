@@ -72,6 +72,20 @@ class UserStudyDay(Base):
   qualifies_for_streak: Mapped[bool] = mapped_column(default=False)
   first_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
   last_reviewed_at_utc: Mapped[datetime | None] = mapped_column(default=None)
+
+
+class Friendship(Base):
+  """Mutual friendship. Always store with user_a_id < user_b_id."""
+
+  __tablename__ = "friendship"
+  __table_args__ = (UniqueConstraint("user_a_id", "user_b_id"),)
+
+  id: Mapped[int] = mapped_column(init=False, primary_key=True)
+  user_a_id: Mapped[str]
+  user_b_id: Mapped[str]
+  created_at: Mapped[datetime] = mapped_column(default_factory=datetime.utcnow)
+
+
 class PushSubscription(Base):
   __tablename__ = "push_subscription"
 
@@ -297,6 +311,31 @@ class StudyActivityResponse(APISchema):
   from_date: date
   to_date: date
   days: list[StudyActivityDay]
+
+
+class PublicUserProfile(APISchema):
+  user_id: str
+  username: str | None
+  display_name: str
+  image_url: str | None
+  is_self: bool
+  is_friend: bool
+  discoverable_deck_count: int
+  average_mastery: int
+  current_streak: int
+
+
+class FriendListItem(APISchema):
+  user_id: str
+  username: str | None
+  display_name: str
+  image_url: str | None
+  discoverable_deck_count: int
+
+
+class FriendActionResponse(APISchema):
+  user_id: str
+  is_friend: bool
 
 
 class SettingsGet(APISchema):

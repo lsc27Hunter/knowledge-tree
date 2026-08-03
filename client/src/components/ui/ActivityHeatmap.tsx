@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getStudyActivity, type StudyActivityDay } from "../../api";
+import {
+  getStudyActivity,
+  getUserStudyActivity,
+  type StudyActivityDay,
+} from "../../api";
 
 /**
- * Map daily review count → intensity 0–4 (GitHub-style).
+ * Map daily review count to intensity 0-4 (GitHub-style).
  *
  * Absolute buckets, aligned with the streak rule (3+ cards/day qualifies):
  *   0      empty
- *   1–2    light
- *   3–5    medium (streak territory)
- *   6–14   heavy
+ *   1-2    light
+ *   3-5    medium (streak territory)
+ *   6-14   heavy
  *   15+    very heavy
  */
 export function reviewsToLevel(reviews: number): 0 | 1 | 2 | 3 | 4 {
@@ -30,7 +34,7 @@ const LEVEL_CLASS: Record<0 | 1 | 2 | 3 | 4, string> = {
 
 const WEEKDAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""] as const;
 
-/** Full year — enough columns that fluid cells stay small while filling the card. */
+/** Full year ? enough columns that fluid cells stay small while filling the card. */
 const WEEKS = 53;
 const GAP_PX = 3;
 const GUTTER_PX = 28;
@@ -39,6 +43,8 @@ const MIN_CELL_PX = 8;
 
 interface ActivityHeatmapProps {
   className?: string;
+  /** When set, loads that user's public study activity instead of your own. */
+  userId?: string;
 }
 
 interface DayCell {
@@ -49,7 +55,10 @@ interface DayCell {
   qualifies: boolean;
 }
 
-export function ActivityHeatmap({ className = "" }: ActivityHeatmapProps) {
+export function ActivityHeatmap({
+  className = "",
+  userId,
+}: ActivityHeatmapProps) {
   const [days, setDays] = useState<StudyActivityDay[]>([]);
   const [fromDate, setFromDate] = useState<string | null>(null);
   const [toDate, setToDate] = useState<string | null>(null);
@@ -63,7 +72,12 @@ export function ActivityHeatmap({ className = "" }: ActivityHeatmapProps) {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await getStudyActivity({ query: { weeks: WEEKS } });
+        const result = userId
+          ? await getUserStudyActivity({
+              path: { userId },
+              query: { weeks: WEEKS },
+            })
+          : await getStudyActivity({ query: { weeks: WEEKS } });
         if (cancelled) return;
         if (result.error) throw result.error;
         setDays(result.data?.days ?? []);
@@ -83,7 +97,7 @@ export function ActivityHeatmap({ className = "" }: ActivityHeatmapProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   const grid = useMemo(
     () => buildGrid(WEEKS, days, fromDate, toDate),
@@ -114,27 +128,21 @@ export function ActivityHeatmap({ className = "" }: ActivityHeatmapProps) {
             role={error ? "alert" : undefined}
           >
             {isLoading
-              ? "Loading…"
+              ? "Loading?"
               : error
                 ? "Couldn't load activity. Try refreshing."
                 : totalReviews === 0
                   ? "Rate cards while studying to fill this in."
-                  : `${totalReviews} review${totalReviews === 1 ? "" : "s"} · ${activeDays} day${activeDays === 1 ? "" : "s"}`}
+                  : `${totalReviews} review${totalReviews === 1 ? "" : "s"} � ${activeDays} day${activeDays === 1 ? "" : "s"}`}
           </p>
         </div>
         <Legend />
       </div>
 
-      {/*
-        Full-width fluid columns: more weeks ⇒ each square stays small.
-        minmax(8px, 1fr) fills the card on desktop; scrolls horizontally on
-        very narrow viewports instead of crushing cells.
-      */}
       <div className="mt-3 w-full overflow-x-auto">
         <div
           className="flex min-w-full flex-col gap-1"
           style={{
-            // Ensure the track is at least wide enough for min cells on mobile.
             minWidth: GUTTER_PX + weekCount * (MIN_CELL_PX + GAP_PX),
           }}
         >
@@ -223,7 +231,7 @@ function tooltipFor(cell: DayCell): string {
     timeZone: "UTC",
   });
   if (cell.reviews === 0) return `No reviews on ${label}`;
-  const streak = cell.qualifies ? " · streak day" : "";
+  const streak = cell.qualifies ? " � streak day" : "";
   return `${cell.reviews} review${cell.reviews === 1 ? "" : "s"} on ${label}${streak}`;
 }
 
@@ -261,7 +269,6 @@ function buildGrid(
         );
       })();
 
-  // Prefer the API's Sunday-aligned start so FE/BE calendars match.
   const start = fromDateIso
     ? parseIsoDate(fromDateIso.slice(0, 10))
     : (() => {

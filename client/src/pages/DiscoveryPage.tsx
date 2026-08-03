@@ -2,7 +2,11 @@ import { UserButton, useUser } from "@clerk/react";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { getDiscoverableDecks, type DeckListResponse } from "../api";
+import {
+  getDiscoverableDecks,
+  listFriends,
+  type DeckListResponse,
+} from "../api";
 import { toast } from "sonner";
 
 import { Navbar } from "../components/ui/Navbar";
@@ -34,6 +38,7 @@ function toDashboardDeck(deck: DeckListResponse): DashboardDeck {
 export default function DiscoveryPage() {
   const { isLoaded, user } = useUser();
   const [decks, setDecks] = useState<DashboardDeck[]>([]);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
   const [decksError, setDecksError] = useState<string | null>(null);
   const [isDecksLoading, setIsDecksLoading] = useState(false);
 
@@ -45,13 +50,18 @@ export default function DiscoveryPage() {
     try {
       setDecksError(null);
       setIsDecksLoading(true);
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-      const result = await getDiscoverableDecks();
+      const [decksResult, friendsResult] = await Promise.all([
+        getDiscoverableDecks(),
+        listFriends(),
+      ]);
 
-      if (result.error) {
-        throw result.error;
+      if (decksResult.error) {
+        throw decksResult.error;
       }
-      setDecks((result.data ?? []).map(toDashboardDeck));
+      setDecks((decksResult.data ?? []).map(toDashboardDeck));
+      if (!friendsResult.error && friendsResult.data) {
+        setFriendIds(new Set(friendsResult.data.map((f) => f.userId)));
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to load decks.";
@@ -69,19 +79,22 @@ export default function DiscoveryPage() {
     void loadDecks();
   }, [isLoaded, loadDecks]);
 
-  const { mine, others } = useMemo(() => {
+  const { mine, fromFriends, others } = useMemo(() => {
     const currentUserId = user?.id;
     const mine: DashboardDeck[] = [];
+    const fromFriends: DashboardDeck[] = [];
     const others: DashboardDeck[] = [];
     for (const deck of decks) {
       if (currentUserId && deck.creatorUserId === currentUserId) {
         mine.push(deck);
+      } else if (deck.creatorUserId && friendIds.has(deck.creatorUserId)) {
+        fromFriends.push(deck);
       } else {
         others.push(deck);
       }
     }
-    return { mine, others };
-  }, [decks, user?.id]);
+    return { mine, fromFriends, others };
+  }, [decks, friendIds, user?.id]);
 
   if (!isLoaded) {
     return (
@@ -105,8 +118,8 @@ export default function DiscoveryPage() {
         <h1 className="type-heading text-fg">Discover</h1>
         <p className="type-body mt-2 max-w-2xl text-primary-light-grey">
           Browse public decks from other learners. Preview cards, then add a
-          copy to your dashboard. Mark a deck public from Create/Edit to share
-          yours.
+          copy to your dashboard. Tap a creator&apos;s name to view their
+          profile and add them as a friend — friends&apos; decks show up first.
         </p>
 
         {decksError ? (
@@ -141,13 +154,38 @@ export default function DiscoveryPage() {
           </section>
         ) : null}
 
-        {!isDecksLoading ? (
+        {!isDecksLoading && fromFriends.length > 0 ? (
           <section className={mine.length > 0 ? "mt-12" : "mt-10"}>
+            <h2 className="type-title text-fg">From Friends</h2>
+            <p className="type-caption mt-1 text-primary-light-grey">
+              Public decks shared by people you&apos;ve added.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {fromFriends.map((deck) => (
+                <DeckCard
+                  key={deck.id}
+                  deckData={deck}
+                  isDiscoveryPage
+                  fromFriend
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {!isDecksLoading ? (
+          <section
+            className={
+              mine.length > 0 || fromFriends.length > 0 ? "mt-12" : "mt-10"
+            }
+          >
             <h2 className="type-title text-fg">From Other Learners</h2>
             {others.length === 0 && !decksError ? (
               <div className="mt-4 rounded-2xl border border-dashed border-border bg-primary-grey/50 px-6 py-12 text-center">
                 <p className="type-body text-primary-light-grey">
-                  No shared decks from other users yet.
+                  {fromFriends.length > 0
+                    ? "No other shared decks right now."
+                    : "No shared decks from other users yet."}
                 </p>
               </div>
             ) : (

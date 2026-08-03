@@ -338,6 +338,7 @@ async def get_study_activity(
     ],
   )
 
+
 @router.delete("/api/decks/{deckId}/complete", response_model=CompleteStudySessionResponse)
 async def complete_study_session(
   deck_id: Annotated[int, Path(alias="deckId")],
