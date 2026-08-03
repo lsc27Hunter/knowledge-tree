@@ -65,8 +65,7 @@ async function registerServiceWorker() {
     return;
   }
 
-  // Dev: never register. Stale/broken workers (e.g. old relative path under
-  // /dashboard) cause intermittent fetch/security weirdness including file://.
+  // Dev: skip SW registration so a leftover worker doesn't break local auth/API.
   if (import.meta.env.DEV) {
     const regs = await navigator.serviceWorker.getRegistrations();
     await Promise.all(regs.map((reg) => reg.unregister()));

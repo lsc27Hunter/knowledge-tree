@@ -72,14 +72,20 @@ async def client_fixture(session: AsyncSession, monkeypatch: pytest.MonkeyPatch)
   def check_notifications_secret_override():
     return None
 
-  # Deck list/detail pull creator names from Clerk — stub it in tests.
-  monkeypatch.setattr(
-    "main.get_clerk_user_profile",
-    lambda _uid: {
-      "username": "tester",
+  # Stub Clerk lookups used by deck lists / friend profiles.
+  def fake_clerk_profile(uid: str):
+    return {
+      "username": f"user_{uid}",
       "first_name": "Test",
       "last_name": "User",
-    },
+      "image_url": f"https://example.com/{uid}.png",
+    }
+
+  monkeypatch.setattr("main.get_clerk_user_profile", fake_clerk_profile)
+  monkeypatch.setattr("auth.get_clerk_user_profile", fake_clerk_profile)
+  monkeypatch.setattr(
+    "routers.friends.get_clerk_user_profile",
+    fake_clerk_profile,
   )
 
   app.dependency_overrides[get_session] = get_session_override

@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from auth import CurrentUserId, get_clerk_user_profile
 from db import SessionDep
 from models import Card, CardCreate, CardCreateResponse, CardDeckGetResponse, CardDeleteResponse, CardListResponse, CardUpdate, CardUpdateResponse, Deck, DeckCreate, DeckCreateResponse, DeckDeleteResponse, DeckGetResponse, DeckListResponse, DeckUpdate, DeckUpdateResponse, DeckUploadResponse
+from routers.friends import friend_ids_for_user, router as friends_router
 from routers.notifications import router as notifications_router
 from routers.settings import router as settings_router
 from routers.study import router as study_router
@@ -69,6 +70,7 @@ app.include_router(study_router)
 app.include_router(notifications_router)
 app.include_router(settings_router)
 app.include_router(decks_router)
+app.include_router(friends_router)
 
 
 @app.get("/")
@@ -126,12 +128,13 @@ async def get_decks(
   return responses
 
 @app.get("/api/discovery/decks", response_model=list[DeckListResponse])
-async def get_discoverable_decks(session: SessionDep):
+async def get_discoverable_decks(session: SessionDep, user_id: CurrentUserId):
   decks = (await session.execute(
     select(Deck)
     .options(selectinload(Deck.cards))
     .where(Deck.discoverable == True)
   )).scalars().all()
+  friend_ids = await friend_ids_for_user(session, user_id)
   responses: list[DeckListResponse] = []
   for deck in decks:
     creator = _creator_metadata(deck.user_id)
@@ -157,6 +160,13 @@ async def get_discoverable_decks(session: SessionDep):
         active_study_session=False,
       )
     )
+  # Friends first, then alphabetical within each group.
+  responses.sort(
+    key=lambda d: (
+      0 if d.creator_user_id in friend_ids else 1,
+      (d.name or "").lower(),
+    )
+  )
   return responses
 
 @app.get("/api/discovery/decks/{deckId}", response_model=DeckGetResponse)

@@ -17,8 +17,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
-          // Preserve the browser Host so FastAPI can match Clerk's azp claim
-          // when CLERK_AUTHORIZED_PARTIES fallback uses the request host.
+          // Keep the original Host so azp checks still see localhost:5173.
           proxy.on("proxyReq", (proxyReq, req) => {
             const host = req.headers.host;
             if (typeof host === "string" && host.length > 0) {
