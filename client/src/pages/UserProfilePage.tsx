@@ -1,6 +1,6 @@
 import { UserButton } from "@clerk/react";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import {
@@ -55,6 +55,8 @@ export default function UserProfilePage() {
     try {
       setError(null);
       setIsLoading(true);
+      setProfile(null);
+      setDecks([]);
       const [profileResult, decksResult] = await Promise.all([
         getUserProfile({ path: { userId } }),
         getUserDiscoverableDecks({ path: { userId } }),
@@ -88,7 +90,7 @@ export default function UserProfilePage() {
     if (!userId || !profile) return;
     setFriendBusy(true);
     const toastId = toast.loading(
-      profile.isFriend ? "Removing friend…" : "Adding friend…",
+      profile.isFriend ? "Removing friend..." : "Adding friend...",
     );
     try {
       const result = profile.isFriend
@@ -159,13 +161,6 @@ export default function UserProfilePage() {
                     </p>
                   ) : null}
                   <p className="type-caption mt-1 text-primary-light-grey">
-                    <Link
-                      to="/friends"
-                      className="underline-offset-2 hover:underline"
-                    >
-                      Friends
-                    </Link>
-                    {" · "}
                     {profile.discoverableDeckCount}{" "}
                     {profile.discoverableDeckCount === 1
                       ? "public deck"
@@ -177,7 +172,7 @@ export default function UserProfilePage() {
               <Button
                 text={
                   friendBusy
-                    ? "…"
+                    ? "..."
                     : profile.isFriend
                       ? "Remove Friend"
                       : "Add Friend"
@@ -196,13 +191,13 @@ export default function UserProfilePage() {
               <Stat
                 icon={Checkmark}
                 value={`${profile.averageMastery}%`}
-                label="Avg Mastery (public decks)"
+                label="Avg mastery"
               />
               <Stat
                 icon={StarBadge}
                 value={String(profile.currentStreak)}
                 label={
-                  profile.currentStreak === 1 ? "Day Streak" : "Days Streak"
+                  profile.currentStreak === 1 ? "Day streak" : "Days streak"
                 }
               />
             </div>
@@ -212,7 +207,7 @@ export default function UserProfilePage() {
             <section className="mt-10">
               <h2 className="type-title text-fg">Public Decks</h2>
               <p className="type-caption mt-1 text-primary-light-grey">
-                Only decks marked discoverable are shown here.
+                Only their discoverable decks.
               </p>
 
               {decks.length === 0 ? (

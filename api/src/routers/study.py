@@ -306,10 +306,17 @@ async def get_study_activity(
   user_id: CurrentUserId,
   weeks: int = 53,
 ):
-  """Return daily review counts for the activity heatmap (max 53 weeks / ~1 year)."""
+  return await study_activity_for_user(session, user_id, weeks)
+
+
+async def study_activity_for_user(
+  session: SessionDep,
+  owner_id: str,
+  weeks: int = 53,
+) -> StudyActivityResponse:
   weeks = max(1, min(weeks, 53))
   today = datetime.utcnow().date()
-  # Start on Sunday so week columns line up like GitHub's graph.
+  # Align week columns to Sunday (same idea as GitHub's contribution graph).
   days_since_sunday = (today.weekday() + 1) % 7
   end = today
   start = end - timedelta(days=days_since_sunday + 7 * (weeks - 1))
@@ -317,7 +324,7 @@ async def get_study_activity(
   rows = list((await session.execute(
     select(UserStudyDay)
     .where(
-      UserStudyDay.user_id == user_id,
+      UserStudyDay.user_id == owner_id,
       UserStudyDay.study_date >= start,
       UserStudyDay.study_date <= end,
     )

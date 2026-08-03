@@ -44,7 +44,7 @@ export default function FriendsPage() {
         <h1 className="type-heading text-fg">Friends</h1>
         <p className="type-body mt-2 max-w-2xl text-primary-light-grey">
           People you&apos;ve added from Discover. Open a profile to see their
-          public decks, mastery, and study activity.
+          public decks and study activity.
         </p>
 
         {error ? (
@@ -55,7 +55,7 @@ export default function FriendsPage() {
           <div className="mt-10 flex min-h-40 items-center justify-center">
             <div className="flex items-center gap-3 rounded-full border border-border bg-primary-grey/90 px-4 py-3 shadow-sm">
               <Spinner className="h-5 w-5" />
-              <span className="type-body text-fg">Loading friends…</span>
+              <span className="type-body text-fg">Loading friends...</span>
             </div>
           </div>
         ) : null}
@@ -64,7 +64,7 @@ export default function FriendsPage() {
           <div className="mt-10 rounded-2xl border border-dashed border-border bg-primary-grey/50 px-6 py-12 text-center">
             <h2 className="type-title text-fg">No friends yet</h2>
             <p className="type-body mx-auto mt-2 max-w-md text-primary-light-grey">
-              Browse Discover, open a creator&apos;s profile, and tap Add Friend.
+              Find people on Discover and add them from their profile.
             </p>
             <div className="mt-6 flex justify-center">
               <Button
@@ -119,13 +119,10 @@ export default function FriendsPage() {
 function Avatar({
   name,
   imageUrl,
-  size = "md",
 }: {
   name: string;
   imageUrl?: string | null;
-  size?: "md" | "lg";
 }) {
-  const dim = size === "lg" ? "h-16 w-16 text-xl" : "h-12 w-12 text-base";
   const initial = (name.trim()[0] || "?").toUpperCase();
 
   if (imageUrl) {
@@ -133,14 +130,14 @@ function Avatar({
       <img
         src={imageUrl}
         alt=""
-        className={`${dim} shrink-0 rounded-full object-cover ring-1 ring-border`}
+        className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-border"
       />
     );
   }
 
   return (
     <div
-      className={`${dim} flex shrink-0 items-center justify-center rounded-full bg-accent/15 font-semibold text-accent ring-1 ring-border`}
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-base font-semibold text-accent ring-1 ring-border"
       aria-hidden="true"
     >
       {initial}

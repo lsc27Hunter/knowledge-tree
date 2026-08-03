@@ -1,10 +1,11 @@
-# Friends and public user profiles.
+# Friends + public profile endpoints.
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from auth import CurrentUserId, get_clerk_user_profile
@@ -16,9 +17,12 @@ from models import (
   FriendListItem,
   Friendship,
   PublicUserProfile,
-  StudyActivityDay,
   StudyActivityResponse,
   UserStudyDay,
+)
+from routers.study import (
+  _calculate_current_streak_with_grace,
+  study_activity_for_user,
 )
 from utils.mastery import calculate_deck_mastery
 
@@ -26,6 +30,7 @@ router = APIRouter(tags=["friends"])
 
 
 def ordered_friend_pair(user_id: str, other_id: str) -> tuple[str, str]:
+  # Keep pairs ordered so (A,B) and (B,A) map to the same row.
   return (user_id, other_id) if user_id < other_id else (other_id, user_id)
 
 
@@ -112,16 +117,7 @@ async def _current_streak(session: SessionDep, owner_id: str) -> int:
       )
     ).scalars().all()
   )
-  if not qualifying_days:
-    return 0
-
-  qualifying = set(qualifying_days)
-  cursor = today if today in qualifying else today - timedelta(days=1)
-  streak = 0
-  while cursor in qualifying:
-    streak += 1
-    cursor -= timedelta(days=1)
-  return streak
+  return _calculate_current_streak_with_grace(qualifying_days, today)
 
 
 def _deck_list_item(deck: Deck, creator: dict[str, str | None]) -> DeckListResponse:
@@ -186,7 +182,11 @@ async def add_friend(
 
   if existing is None:
     session.add(Friendship(user_a_id=a, user_b_id=b))
-    await session.commit()
+    try:
+      await session.commit()
+    except IntegrityError:
+      # Another request inserted the same pair first.
+      await session.rollback()
 
   return FriendActionResponse(user_id=other_id, is_friend=True)
 
@@ -272,36 +272,4 @@ async def get_user_study_activity(
   other_id: Annotated[str, Path(alias="userId")],
   weeks: int = 53,
 ):
-  weeks = max(1, min(weeks, 53))
-  today = datetime.utcnow().date()
-  days_since_sunday = (today.weekday() + 1) % 7
-  end = today
-  start = end - timedelta(days=days_since_sunday + 7 * (weeks - 1))
-
-  rows = list(
-    (
-      await session.execute(
-        select(UserStudyDay)
-        .where(
-          UserStudyDay.user_id == other_id,
-          UserStudyDay.study_date >= start,
-          UserStudyDay.study_date <= end,
-        )
-        .order_by(UserStudyDay.study_date.asc())
-      )
-    ).scalars().all()
-  )
-
-  return StudyActivityResponse(
-    from_date=start,
-    to_date=end,
-    days=[
-      StudyActivityDay(
-        date=row.study_date,
-        reviews_count=row.reviews_count,
-        unique_cards_count=row.unique_cards_count,
-        qualifies_for_streak=row.qualifies_for_streak,
-      )
-      for row in rows
-    ],
-  )
+  return await study_activity_for_user(session, other_id, weeks)

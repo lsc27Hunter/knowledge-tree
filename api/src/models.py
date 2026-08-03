@@ -75,7 +75,7 @@ class UserStudyDay(Base):
 
 
 class Friendship(Base):
-  """Mutual friendship. Always store with user_a_id < user_b_id."""
+  # Store ids with user_a_id < user_b_id so each pair is unique.
 
   __tablename__ = "friendship"
   __table_args__ = (UniqueConstraint("user_a_id", "user_b_id"),)
@@ -307,7 +307,6 @@ class StudyActivityDay(APISchema):
 
 
 class StudyActivityResponse(APISchema):
-  # Inclusive UTC date range covered by `days` (missing days = no activity).
   from_date: date
   to_date: date
   days: list[StudyActivityDay]

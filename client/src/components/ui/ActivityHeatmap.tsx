@@ -7,14 +7,8 @@ import {
 } from "../../api";
 
 /**
- * Map daily review count to intensity 0-4 (GitHub-style).
- *
- * Absolute buckets, aligned with the streak rule (3+ cards/day qualifies):
- *   0      empty
- *   1-2    light
- *   3-5    medium (streak territory)
- *   6-14   heavy
- *   15+    very heavy
+ * Heatmap intensity from daily review count (0-4).
+ * Buckets roughly match the streak rule (3+ cards/day).
  */
 export function reviewsToLevel(reviews: number): 0 | 1 | 2 | 3 | 4 {
   if (reviews <= 0) return 0;
@@ -34,16 +28,15 @@ const LEVEL_CLASS: Record<0 | 1 | 2 | 3 | 4, string> = {
 
 const WEEKDAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""] as const;
 
-/** Full year ? enough columns that fluid cells stay small while filling the card. */
+/** ~1 year of weeks so cells stay small on wide layouts. */
 const WEEKS = 53;
 const GAP_PX = 3;
 const GUTTER_PX = 28;
-/** Floor so squares stay tappable on narrow screens (scrolls if needed). */
 const MIN_CELL_PX = 8;
 
 interface ActivityHeatmapProps {
   className?: string;
-  /** When set, loads that user's public study activity instead of your own. */
+  /** Load another user's activity instead of yours. */
   userId?: string;
 }
 
@@ -128,12 +121,12 @@ export function ActivityHeatmap({
             role={error ? "alert" : undefined}
           >
             {isLoading
-              ? "Loading?"
+              ? "Loading..."
               : error
                 ? "Couldn't load activity. Try refreshing."
                 : totalReviews === 0
                   ? "Rate cards while studying to fill this in."
-                  : `${totalReviews} review${totalReviews === 1 ? "" : "s"} · ${activeDays} day${activeDays === 1 ? "" : "s"}`}
+                  : `${totalReviews} review${totalReviews === 1 ? "" : "s"} \u00B7 ${activeDays} day${activeDays === 1 ? "" : "s"}`}
           </p>
         </div>
         <Legend />
@@ -231,7 +224,7 @@ function tooltipFor(cell: DayCell): string {
     timeZone: "UTC",
   });
   if (cell.reviews === 0) return `No reviews on ${label}`;
-  const streak = cell.qualifies ? " · streak day" : "";
+  const streak = cell.qualifies ? " \u00B7 streak day" : "";
   return `${cell.reviews} review${cell.reviews === 1 ? "" : "s"} on ${label}${streak}`;
 }
 

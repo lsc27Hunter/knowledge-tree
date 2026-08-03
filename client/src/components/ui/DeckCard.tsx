@@ -35,7 +35,7 @@ import { ExportDeckButton, ExportDiscoverableDeckButton} from "./ExportDeckButto
 interface DeckCardProps {
   deckData: Deck;
   onChanged?: () => void;
-  /** Highlight that this deck belongs to a friend (Discover). */
+  /** Show a Friend chip on Discover cards. */
   fromFriend?: boolean;
 }
 

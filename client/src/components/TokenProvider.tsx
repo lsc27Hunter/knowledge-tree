@@ -6,12 +6,8 @@ import { Spinner } from "./ui/Spinner";
 import { Button } from "./ui/Button";
 
 /**
- * Wires Clerk JWTs into the Hey API client.
- *
- * - Wait for Clerk handshake + a real getToken() before mounting signed-in pages
- *   (avoids racing dashboard fetches ahead of the session).
- * - Attach the token in a custom fetch: hey-api spreads options into RequestInit,
- *   which can drop Authorization in some browsers if we only use `auth`.
+ * Attach Clerk tokens to API requests.
+ * Also waits out the __clerk_handshake redirect before rendering signed-in UI.
  */
 export function TokenProvider({ children }: { children: ReactNode }) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -94,7 +90,7 @@ export function TokenProvider({ children }: { children: ReactNode }) {
 
       if (!cancelled) {
         setError(
-          "Signed in, but no session token yet. If this persists in Firefox, allow clerk.accounts.dev (tracking protection), then sign out and back in.",
+          "Couldn't get a session token. In Firefox, allow clerk.accounts.dev under tracking protection, then sign out and back in.",
         );
         setReady(true);
       }

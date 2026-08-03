@@ -59,9 +59,13 @@ export default function DiscoveryPage() {
         throw decksResult.error;
       }
       setDecks((decksResult.data ?? []).map(toDashboardDeck));
-      if (!friendsResult.error && friendsResult.data) {
-        setFriendIds(new Set(friendsResult.data.map((f) => f.userId)));
-      }
+      setFriendIds(
+        new Set(
+          friendsResult.error
+            ? []
+            : (friendsResult.data ?? []).map((f) => f.userId),
+        ),
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to load decks.";
@@ -118,8 +122,7 @@ export default function DiscoveryPage() {
         <h1 className="type-heading text-fg">Discover</h1>
         <p className="type-body mt-2 max-w-2xl text-primary-light-grey">
           Browse public decks from other learners. Preview cards, then add a
-          copy to your dashboard. Tap a creator&apos;s name to view their
-          profile and add them as a friend — friends&apos; decks show up first.
+          copy to your dashboard. Friends&apos; decks are listed first.
         </p>
 
         {decksError ? (
@@ -132,7 +135,7 @@ export default function DiscoveryPage() {
               <div className="flex items-center gap-3 rounded-full border border-border bg-background px-4 py-3 shadow-sm">
                 <Spinner className="h-5 w-5" />
                 <span className="type-body text-fg">
-                  Loading discoverable decks…
+                  Loading discoverable decks...
                 </span>
               </div>
             </div>
@@ -158,7 +161,7 @@ export default function DiscoveryPage() {
           <section className={mine.length > 0 ? "mt-12" : "mt-10"}>
             <h2 className="type-title text-fg">From Friends</h2>
             <p className="type-caption mt-1 text-primary-light-grey">
-              Public decks shared by people you&apos;ve added.
+              Discoverable decks from your friends.
             </p>
             <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
               {fromFriends.map((deck) => (

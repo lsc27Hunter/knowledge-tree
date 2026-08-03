@@ -72,7 +72,7 @@ async def client_fixture(session: AsyncSession, monkeypatch: pytest.MonkeyPatch)
   def check_notifications_secret_override():
     return None
 
-  # Deck list/detail and friend profiles pull names from Clerk — stub in tests.
+  # Stub Clerk lookups used by deck lists / friend profiles.
   def fake_clerk_profile(uid: str):
     return {
       "username": f"user_{uid}",

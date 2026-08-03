@@ -160,7 +160,7 @@ async def get_discoverable_decks(session: SessionDep, user_id: CurrentUserId):
         active_study_session=False,
       )
     )
-  # Friends' decks first, then everyone else (stable by name within each group).
+  # Friends first, then alphabetical within each group.
   responses.sort(
     key=lambda d: (
       0 if d.creator_user_id in friend_ids else 1,
