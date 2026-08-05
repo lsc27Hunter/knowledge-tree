@@ -41,7 +41,7 @@ export function ExportDiscoverableDeckButton({ deckId }: ExportDeckButtonProps) 
       color="primary-grey"
       textColor="fg"
       icon={DownloadIcon}
-      iconOnlyOnMobile
+      width="full-on-mobile"
       onClick={onClick}
       themeIcon
     />

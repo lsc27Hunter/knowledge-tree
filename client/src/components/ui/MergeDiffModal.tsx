@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -37,9 +37,43 @@ export function MergeDiffModal({
   onMerged,
   onDismiss,
 }: MergeDiffModalProps) {
+  return (
+    <ModalShell state={state} size="xl">
+      <MergeDiffModalContent
+        state={state}
+        deckId={deckId}
+        deckName={deckName}
+        file={file}
+        onMerged={onMerged}
+        onDismiss={onDismiss}
+      />
+    </ModalShell>
+  );
+}
+
+interface MergeDiffModalContentProps {
+  state: ModalState;
+  deckId: number;
+  deckName?: string;
+  file: File | null;
+  onMerged?: () => void;
+  onDismiss?: () => void;
+  children?: ReactNode;
+}
+
+export function MergeDiffModalContent({
+  state,
+  deckId,
+  deckName,
+  file,
+  onMerged,
+  onDismiss,
+  children,
+}: MergeDiffModalContentProps) {
   const [changes, setChanges] = useState<DeckMergeChange[]>([]);
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [hasData, setHasData] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showUnchanged, setShowUnchanged] = useState(false);
@@ -83,7 +117,10 @@ export function MergeDiffModal({
         setErrorMessage(message);
         toast.error("Merge preview failed", { description: message });
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setHasData(true);
+        }
       }
     }
 
@@ -146,7 +183,7 @@ export function MergeDiffModal({
         description: `${stats?.added ?? 0} added · ${stats?.updated ?? 0} updated`,
       });
       onMerged?.();
-      onDismiss();
+      onDismiss?.();
       state.close();
     } catch (error) {
       const message =
@@ -158,24 +195,25 @@ export function MergeDiffModal({
   }
 
   return (
-    <ModalShell state={state} size="xl">
+    <>
       <ModalHeaderShell>
         <ModalHeaderMain>
           {deckName ? `Review Merge · ${deckName}` : "Review Merge"}
         </ModalHeaderMain>
         <p className="type-caption mt-1 text-primary-light-grey">
           Accept or reject each change before applying — like reviewing a git
-          diff. Cards not in the CSV are never deleted.
+          diff. Cards in the deck are never deleted.
         </p>
       </ModalHeaderShell>
 
       <ModalBody className="flex flex-col gap-4">
-        {isLoading ? (
+        {children}
+        {!hasData ? (
           <p className="type-body text-primary-light-grey">Building diff…</p>
         ) : errorMessage ? (
           <p className="type-body text-danger-red">{errorMessage}</p>
         ) : (
-          <>
+          <div className={`flex flex-col gap-4 transition-opacity ${isLoading ? "opacity-50" : ""}`}>
             <div className="flex flex-col gap-3 type-caption sm:flex-row sm:flex-wrap sm:items-center">
               <div className="flex flex-wrap items-center gap-2">
                 <StatPill tone="added" label={`${actionable.filter((c) => c.kind === "added").length} Added`} />
@@ -234,7 +272,7 @@ export function MergeDiffModal({
                 ) : null}
               </div>
             ) : null}
-          </>
+          </div>
         )}
       </ModalBody>
 
@@ -245,7 +283,7 @@ export function MergeDiffModal({
           color="primary-grey"
           textColor="fg"
           onClick={() => {
-            onDismiss();
+            onDismiss?.();
             state.close();
           }}
         />
@@ -264,7 +302,7 @@ export function MergeDiffModal({
           }}
         />
       </ModalFooter>
-    </ModalShell>
+    </>
   );
 }
 
