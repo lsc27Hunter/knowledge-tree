@@ -9,7 +9,7 @@ import {
 
 interface ButtonProps {
   text: string;
-  width?: "fit" | "full";
+  width?: "fit" | "full" | "full-on-mobile";
   color?: "accent" | "background" | "white" | "primary-grey" | "danger" | "ghost";
   textColor?: "white" | "primary-light-grey" | "accent" | "fg";
   icon?: string;
@@ -59,6 +59,7 @@ export function Button({
   const widthClasses = {
     fit: "w-fit",
     full: "w-full",
+    "full-on-mobile": "w-full sm:w-fit",
   };
 
   const navigate = useNavigate();

@@ -20,7 +20,7 @@ const sizeClass = {
 // Shared dialog: blur backdrop, esc/outside close, light open animation.
 export function ModalShell({ state, children, size = "md" }: ModalShellProps) {
   return (
-    <Dialog.Root open={state.isOpen} onOpenChange={state.setIsOpen}>
+    <Dialog.Root open={state.isOpen} onOpenChange={state.onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop
           className={[
@@ -31,10 +31,10 @@ export function ModalShell({ state, children, size = "md" }: ModalShellProps) {
         />
         <Dialog.Popup
           className={[
-            "fixed top-1/2 left-1/2 z-50 flex max-h-[min(90dvh,56rem)] -translate-x-1/2 -translate-y-1/2",
+            "fixed top-1/2 left-1/2 flex max-h-[min(90dvh,56rem)] -translate-x-1/2 -translate-y-1/2",
             "flex-col overflow-hidden rounded-2xl border border-border bg-primary-grey text-fg",
             "shadow-[var(--shadow-card)] outline-none",
-            "transition-[opacity,transform] duration-200 ease-out",
+            "transition-[opacity,transform,width,height] duration-200 ease-out",
             "data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0",
             "data-[ending-style]:scale-[0.97] data-[ending-style]:opacity-0",
             sizeClass[size],
@@ -109,18 +109,25 @@ function CloseButton() {
 
 export interface ModalState {
   isOpen: boolean;
-  setIsOpen(isOpen: boolean): void;
+  onOpenChange(isOpen: boolean): void;
   open(): void;
   close(): void;
 }
 
-export function useModalState() {
+export function useModalState(options?: { onClose?(): void }) {
   const [isOpen, setIsOpen] = useState(false);
+  function onOpenChange(isOpen: boolean) {
+    setIsOpen(isOpen);
+    if (!isOpen) {
+      options?.onClose?.();
+    }
+  }
   function open() {
     setIsOpen(true);
   }
   function close() {
     setIsOpen(false);
+    options?.onClose?.();
   }
-  return { isOpen, setIsOpen, open, close };
+  return { isOpen, onOpenChange, open, close };
 }
