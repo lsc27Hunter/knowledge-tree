@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pywebpush import WebPushException, webpush_async
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from routers.study import calculate_current_streak
 from log import log
 from auth import CurrentUserId
 from db import SessionDep
@@ -72,7 +73,7 @@ async def send_notifications_helper(
     )).scalars().all()
     if len(push_subscriptions) == 0:
       continue
-    deck_names = await get_notification_deck_names(
+    deck_names, streak_condition, streak = await get_notification_deck_names(
       session=session,
       user_id=settings.user_id,
       notification_conditions=NotificationConditions.from_settings(settings),
@@ -83,7 +84,7 @@ async def send_notifications_helper(
       try:
         await send_push_message(
           subscription=PushSubscriptionData.from_db(subscription),
-          data=get_notification_message(deck_names).model_dump_json(),
+          data=get_notification_message(deck_names, streak_condition, streak).model_dump_json(),
           sub=sub,
         )
         sent += 1
@@ -115,7 +116,7 @@ async def send_test_notification(
   sub = get_sub(host)
   subscription = body.push_subscription
 
-  deck_names = await get_notification_deck_names(
+  deck_names, streak_condition, streak = await get_notification_deck_names(
     session=session,
     user_id=user_id,
     notification_conditions=body.notification_conditions,
@@ -123,7 +124,7 @@ async def send_test_notification(
 
   await send_push_message(
     subscription=subscription,
-    data=get_notification_message(deck_names).model_dump_json(),
+    data=get_notification_message(deck_names, streak_condition, streak).model_dump_json(),
     sub=sub,
   )
 
@@ -151,8 +152,8 @@ async def send_push_message(
     },
 
     vapid_private_key=vapid_private_key,
-  
-    # Without this, the push message might be dropped if the app isn't running on the mobile device.
+
+    # On mobile devices, push messages might be discarded if the app isn't running. This prevents that.
     headers={
       "Urgency": "high",
     },
@@ -162,50 +163,72 @@ async def get_notification_deck_names(
   session: AsyncSession,
   user_id: str,
   notification_conditions: NotificationConditions,
-):
+) -> tuple[set[str], bool, int]:
   sequences: list[Sequence[str]] = []
-  if notification_conditions.deck.enabled:
-    sequence = (await session.execute(
-      select(Deck.name)
-      .join(Card, Card.deck_id == Deck.id)
-      .where(Deck.user_id == user_id, Card.next_review_date <= datetime.utcnow() - timedelta(days=notification_conditions.deck.days))
-      .group_by(Deck.id, Deck.name)
-      .having(func.count(Card.id) >= notification_conditions.deck.cards)
-    )).scalars().all()
-    sequences.append(sequence)
-  if notification_conditions.card.enabled:
-    sequence = (await session.execute(
-      select(Deck.name)
-      .join(Card, Card.deck_id == Deck.id)
-      .where(Deck.user_id == user_id, Card.next_review_date <= datetime.utcnow() - timedelta(days=notification_conditions.card.days))
-      .group_by(Deck.id, Deck.name)
-    )).scalars().all()
-    sequences.append(sequence)
+  streak = await calculate_current_streak(session, user_id)
   if notification_conditions.streak.enabled:
-    # TODO
-    pass
+    streak_condition = streak >= notification_conditions.streak.days
+  else:
+    streak_condition = False
+
+  if streak_condition:
+    sequence = (await session.execute(
+      select(Deck.name)
+      .join(Card, Card.deck_id == Deck.id)
+      .where(Deck.user_id == user_id, Card.next_review_date <= datetime.utcnow())
+      .group_by(Deck.id, Deck.name)
+    )).scalars().all()
+    sequences.append(sequence)
+  else:
+    if notification_conditions.deck.enabled:
+      sequence = (await session.execute(
+        select(Deck.name)
+        .join(Card, Card.deck_id == Deck.id)
+        .where(Deck.user_id == user_id, Card.next_review_date <= datetime.utcnow() - timedelta(days=notification_conditions.deck.days))
+        .group_by(Deck.id, Deck.name)
+        .having(func.count(Card.id) >= notification_conditions.deck.cards)
+      )).scalars().all()
+      sequences.append(sequence)
+    if notification_conditions.card.enabled:
+      sequence = (await session.execute(
+        select(Deck.name)
+        .join(Card, Card.deck_id == Deck.id)
+        .where(Deck.user_id == user_id, Card.next_review_date <= datetime.utcnow() - timedelta(days=notification_conditions.card.days))
+        .group_by(Deck.id, Deck.name)
+      )).scalars().all()
+      sequences.append(sequence)
   deck_names: set[str] = set()
   for deck_name in chain(*sequences):
     deck_names.add(deck_name)
-  return deck_names
+  return deck_names, streak_condition, streak
 
-def get_notification_message(deck_names: set[str]) -> PushMessage:
+def get_notification_message(deck_names: set[str], streak_condition: bool, streak: int) -> PushMessage:
   if len(deck_names) == 0:
     return PushMessage(
       title="No alerts!",
       body=None,
     )
   else:
-    random_deck_name = random.choice(list(deck_names))
-    others = len(deck_names) - 1
-    if others == 0:
-      body = f"'{random_deck_name}' is due."
-    else:
-      body = f"'{random_deck_name}' and {others} others are due."
+    body = get_notification_body(deck_names, streak_condition)
     return PushMessage(
-      title="Review",
+      title=get_notification_title(streak_condition, streak),
       body=body,
     )
+
+def get_notification_body(deck_names: set[str], streak_condition: bool) -> str:
+  random_deck_name = random.choice(list(deck_names))
+  others = len(deck_names) - 1
+  adj = "ready" if streak_condition else "due"
+  if others == 0:
+    return f"'{random_deck_name}' is {adj}."
+  else:
+    return f"'{random_deck_name}' and {others} others are {adj}."
+
+def get_notification_title(streak_condition: bool, streak: int) -> str:
+  if streak_condition:
+    return f"{streak}-day streak!"
+  else:
+    return "Review"
 
 def check_notifications_secret(
   credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
