@@ -11,7 +11,6 @@ import {
   DeckCard,
   type Deck as DashboardDeck,
 } from "../components/ui/DeckCard";
-import { ActivityHeatmap } from "../components/ui/ActivityHeatmap";
 import { Spinner } from "../components/ui/Spinner";
 import { Button } from "../components/ui/Button";
 import { PageShell } from "../components/ui/PageShell";
@@ -221,8 +220,6 @@ export default function DashboardPage() {
             }
           />
         </div>
-
-        <ActivityHeatmap className="mt-6" />
 
         <div className="mt-6 flex justify-stretch sm:justify-end">
           <div className="relative w-full sm:w-auto" ref={sortMenuRef}>

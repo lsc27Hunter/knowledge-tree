@@ -9,9 +9,7 @@ export default defineConfig({
   plugins: [
     {
       name: '@hey-api/client-fetch',
-      // Don't infer a base URL from the local openapi.json path.
-      baseUrl: false,
-      runtimeConfigPath: './src/apiClientConfig',
+      baseUrl: false, // Stop HeyAPI from putting 'openapi.json' in the API route.
     },
   ]
 });
