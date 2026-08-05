@@ -61,20 +61,8 @@ createRoot(document.getElementById("root")!).render(
 );
 
 async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) {
-    return;
-  }
-
-  // Dev: never register. Stale/broken workers (e.g. old relative path under
-  // /dashboard) cause intermittent fetch/security weirdness including file://.
-  if (import.meta.env.DEV) {
-    const regs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(regs.map((reg) => reg.unregister()));
-    return;
-  }
-
-  if ("PushManager" in window) {
-    await navigator.serviceWorker.register("/service-worker.js");
+  if ("serviceWorker" in navigator && "PushManager" in window) {
+    await navigator.serviceWorker.register("./service-worker.js");
   } else {
     console.info("Your browser does not support notifications");
   }

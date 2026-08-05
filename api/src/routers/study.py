@@ -19,8 +19,6 @@ from models import (
   Deck,
   DeckMasteryResponse,
   StreakResponse,
-  StudyActivityDay,
-  StudyActivityResponse,
   StudySessionCard,
   StudySession,
   StudySessionCardResponse,
@@ -297,45 +295,6 @@ async def get_streak(
     today_unique_cards_count=today_unique_cards_count,
     minimum_cards_per_day=MINIMUM_CARDS_PER_DAY,
     qualifies_today=qualifies_today,
-  )
-
-
-@router.get("/api/me/study-activity", response_model=StudyActivityResponse)
-async def get_study_activity(
-  session: SessionDep,
-  user_id: CurrentUserId,
-  weeks: int = 53,
-):
-  """Return daily review counts for the activity heatmap (max 53 weeks / ~1 year)."""
-  weeks = max(1, min(weeks, 53))
-  today = datetime.utcnow().date()
-  # Start on Sunday so week columns line up like GitHub's graph.
-  days_since_sunday = (today.weekday() + 1) % 7
-  end = today
-  start = end - timedelta(days=days_since_sunday + 7 * (weeks - 1))
-
-  rows = list((await session.execute(
-    select(UserStudyDay)
-    .where(
-      UserStudyDay.user_id == user_id,
-      UserStudyDay.study_date >= start,
-      UserStudyDay.study_date <= end,
-    )
-    .order_by(UserStudyDay.study_date.asc())
-  )).scalars().all())
-
-  return StudyActivityResponse(
-    from_date=start,
-    to_date=end,
-    days=[
-      StudyActivityDay(
-        date=row.study_date,
-        reviews_count=row.reviews_count,
-        unique_cards_count=row.unique_cards_count,
-        qualifies_for_streak=row.qualifies_for_streak,
-      )
-      for row in rows
-    ],
   )
 
 @router.delete("/api/decks/{deckId}/complete", response_model=CompleteStudySessionResponse)
