@@ -79,9 +79,12 @@ function Form({
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [isDiscoverable, setIsDiscoverable] = useState(false);
+
+  // Cards with an id will be updated; cards with no id are new.
   const [cards, setCards] = useState<CardDeckUpdate[]>([
     { id: null, question: "", answer: "" },
   ]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 

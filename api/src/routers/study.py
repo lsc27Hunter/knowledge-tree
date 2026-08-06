@@ -37,6 +37,7 @@ async def study(
   session: SessionDep,
   user_id: CurrentUserId,
 ):
+  """Begin a study session. Resumes an existing session or creates a new one."""
   existing = await get_existing_study_session(deck_id, user_id, session)
   if existing is None:
     try:
@@ -94,6 +95,7 @@ async def create_new_study_session(deck_id: int, user_id: str, session: AsyncSes
     .limit(20)
   )).scalars().all())
   if len(cards_due) == 0:
+    # No study session created.
     return StudySessionResponse(
       deck_id=deck_id,
       cards=[],
@@ -104,7 +106,10 @@ async def create_new_study_session(deck_id: int, user_id: str, session: AsyncSes
       old_mastery=mastery,
       cards_left=cards_left,
     )
+  
+  # Randomize the order of the cards.
   shuffle(cards_due)
+
   study_session = StudySession(
     deck_id=deck_id,
     old_mastery=mastery,
@@ -143,6 +148,7 @@ async def create_new_study_session(deck_id: int, user_id: str, session: AsyncSes
   )
 
 def get_mastery_change(card: Card, rating: Literal["red", "yellow", "green"]):
+  """Projects what the change in this card's mastery will be after applying the given rating."""
   current_mastery = card_mastery(card.interval)
   quality = rating_to_quality(rating)
   projected_sm2 = calculate_sm2(
@@ -155,6 +161,14 @@ def get_mastery_change(card: Card, rating: Literal["red", "yellow", "green"]):
   return projected_mastery - current_mastery
 
 async def get_deck_progress(deck_id: int, user_id: str, session: AsyncSession):
+  """
+  Information that is useful for the study session results page.
+
+  Allows client to:
+  - start the mastery bar animation from the old mastery
+  - compute the new deck mastery after rating a card
+  - track whether the deck can be continued or has been completed (cards_left)
+  """
   deck = (await session.execute(
     select(Deck)
     .options(selectinload(Deck.cards))
@@ -196,7 +210,7 @@ async def review_card(
     raise HTTPException(status_code=404, detail="Card not found")
   
   if study_session_card.rating is not None:
-    # Already rated.
+    # Already rated - do nothing.
     mastery = calculate_deck_mastery(deck.cards)
     cards_left = get_cards_left(deck.cards)
     return CardReviewResponse(
@@ -303,6 +317,7 @@ async def complete_study_session(
   session: SessionDep,
   user_id: CurrentUserId,
 ):
+  """Deletes the study session from the database."""
   deck = (await session.execute(
     select(Deck)
     .options(joinedload(Deck.study_session))
@@ -336,7 +351,16 @@ async def get_deck_mastery(
     mastery_percentage=calculate_deck_mastery(cards),
   )
 
-def get_study_session_index_and_page(study_session_cards: Sequence[StudySessionCard]):
+def get_study_session_index_and_page(study_session_cards: Sequence[StudySessionCard]) -> tuple[int, Literal["cards", "results"]]:
+  """
+  When the user leaves their study session and returns to it, they should be returned to a
+  reasonable place rather than the very beginning every time.
+
+  We return them to a particular card index or to the results page.
+
+  - index - which card in the study session the user is up to, given by the first unrated card
+  - page - whichever page the user was on last
+  """
   index = 0
   page = "cards"
   for study_session_card in study_session_cards:
@@ -349,6 +373,7 @@ def get_study_session_index_and_page(study_session_cards: Sequence[StudySessionC
   return (index, page)
 
 def get_cards_left(cards: Sequence[Card]) -> int:
+  """The number of cards that are ready for review."""
   count = 0
   for card in cards:
     if card.next_review_date <= datetime.utcnow():
@@ -397,6 +422,7 @@ async def calculate_current_streak(session: AsyncSession, user_id: str) -> int:
   return _calculate_current_streak_with_grace(qualifying_days, today)
 
 async def _get_qualifying_days(session: AsyncSession, user_id: str) -> list[date]:
+  """The days that qualify for a streak."""
   return list((await session.execute(
     select(UserStudyDay.study_date)
     .where(

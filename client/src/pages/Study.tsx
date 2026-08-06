@@ -36,7 +36,7 @@ type Card = StudySessionCardResponse;
 type Rating = "red" | "yellow" | "green";
 type RateResult = "rated" | "unrated";
 
-type StudyState = ReturnType<typeof useStudyState>
+type StudyState = ReturnType<typeof useStudyState>;
 
 function useStudyState() {
   const deckId = parseInt(useParams().deckId!);
@@ -58,7 +58,6 @@ function useStudyState() {
     setIsLoading(false);
     if (res.error) {
       setStudySession(null);
-      setIsLoading(false);
       toast.error("Couldn't start study session", {
         description:
           res.error instanceof Error ? res.error.message : "Please try again.",
@@ -78,7 +77,6 @@ function useStudyState() {
     setRatings(fetchedRatings);
     setCardsLeft(fetchedStudySession.cardsLeft);
     setMastery(fetchedStudySession.mastery);
-    setIsLoading(false);
   }
 
   function gotoResults() {
@@ -117,14 +115,13 @@ function useStudyState() {
   }
 
   return {
-    deckId,
-    studySession, setStudySession,
-    isLoading, setIsLoading,
-    startFrom, setStartFrom,
-    page, setPage,
-    ratings, setRatings,
-    mastery, setMastery,
-    cardsLeft, setCardsLeft,
+    studySession,
+    isLoading,
+    startFrom,
+    page,
+    ratings,
+    mastery,
+    cardsLeft,
     beginStudy,
     gotoResults,
     updateRating,
@@ -213,6 +210,11 @@ function CardsPage({
       setRevealed(false);
     }
   }
+  function next() {
+    if (!nextCard()) {
+      gotoResults();
+    }
+  }
   function nextCard() {
     const i = index + 1;
     if (i < cards.length) {
@@ -222,11 +224,6 @@ function CardsPage({
       return true;
     } else {
       return false;
-    }
-  }
-  function next() {
-    if (!nextCard()) {
-      gotoResults();
     }
   }
   useEffect(() => {
@@ -697,6 +694,14 @@ function toBorderColor(rating: Rating | undefined) {
   }
 }
 
+function useKeyDown(key: string, onPress: () => void) {
+  return useKeyDownHelper(key, true, onPress);
+}
+
+function useKeyPress(key: string, onPress: () => void) {
+  return useKeyDownHelper(key, false, onPress);
+}
+
 function useKeyDownHelper(key: string, holdToRepeat: boolean, onPress: () => void) {
   const [keyPressed, setKeyPressed] = useState(false);
   useEffect(() => {
@@ -719,14 +724,6 @@ function useKeyDownHelper(key: string, holdToRepeat: boolean, onPress: () => voi
     };
   });
   return keyPressed;
-}
-
-function useKeyDown(key: string, onPress: () => void) {
-  return useKeyDownHelper(key, true, onPress);
-}
-
-function useKeyPress(key: string, onPress: () => void) {
-  return useKeyDownHelper(key, false, onPress);
 }
 
 export default StudyPage;

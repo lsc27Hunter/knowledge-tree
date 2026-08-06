@@ -7,6 +7,7 @@ import { MergeDiffModalContent } from "./MergeDiffModal";
 import Papa from "papaparse";
 import { fieldInputClass, FieldLabel, fieldLabelClass } from "./DeckFormFields";
 import { Select } from "@base-ui/react";
+import { toast } from "sonner";
 
 interface Deck {
   id: number;
@@ -41,6 +42,9 @@ export default function DiscoveryMergeModalContent({ deckId, deckName: srcDeckNa
     <MergeDiffModalContent
       state={modalState}
       deckId={destDeck.id}
+
+      // The original merge modal expects a CSV file as input. To reuse the same modal, we
+      // convert the source deck to CSV.
       file={srcDeck ? toCsv(srcDeck.name, srcDeck.cards) : null}
     >
       <DeckSelectForm srcDeckName={srcDeckName} state={deckSelectState} />
@@ -165,9 +169,11 @@ function useDeckSelectState(): DeckSelectState {
   const [selectedDeck, setSelectedDeck] = useState<null | DeckGetResponse>(null);
   useEffect(() => {
     getDecks().then(res => {
-      if (res.data) {
-        setDecks(res.data);
+      if (res.error) {
+        toast.error("Couldn't load decks.");
+        throw res.error;
       }
+      setDecks(res.data);
     });
   }, []);
 
@@ -175,6 +181,7 @@ function useDeckSelectState(): DeckSelectState {
   function onSelectDeck(deck: Deck) {
     getDeck({ path: { deckId: deck.id }}).then(res => {
       if (res.error) {
+        toast.error("Couldn't select deck, please try again.");
         throw res.error;
       }
       setSelectedDeck(res.data);
