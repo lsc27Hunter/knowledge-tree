@@ -2,16 +2,17 @@ import { useAuth, useClerk } from "@clerk/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { client } from "../api/client.gen";
+import { attachBearerToRequest } from "../lib/apiAuth";
 import { Spinner } from "./ui/Spinner";
 import { Button } from "./ui/Button";
 
 /**
- * Wires Clerk JWTs into the Hey API client.
+ * Attach Clerk JWTs to Hey API calls and wait for handshake/`getToken`
+ * before rendering signed-in UI.
  *
- * - Wait for Clerk handshake + a real getToken() before mounting signed-in pages
- *   (avoids racing dashboard fetches ahead of the session).
- * - Attach the token in a custom fetch: hey-api spreads options into RequestInit,
- *   which can drop Authorization in some browsers if we only use `auth`.
+ * Do not replace `fetch` by manually rebuilding Request fields — that can
+ * drop JSON/FormData bodies (FastAPI 422 on POST /api/decks). Use `auth` +
+ * a request interceptor that clones the Request instead.
  */
 export function TokenProvider({ children }: { children: ReactNode }) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -32,36 +33,26 @@ export function TokenProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     client.setConfig({
       baseUrl: "",
-      fetch: async (input, init) => {
-        const token =
-          (await getTokenRef.current().catch(() => null)) ?? tokenRef.current;
-
-        if (input instanceof Request) {
-          const headers = new Headers(input.headers);
-          if (token) headers.set("Authorization", `Bearer ${token}`);
-          return globalThis.fetch(input.url, {
-            method: input.method,
-            headers,
-            body:
-              input.method === "GET" || input.method === "HEAD"
-                ? undefined
-                : input.body,
-            credentials: "same-origin",
-            signal: input.signal,
-            redirect: input.redirect,
-          });
-        }
-
-        const headers = new Headers(init?.headers);
-        if (token) headers.set("Authorization", `Bearer ${token}`);
-        return globalThis.fetch(input, {
-          ...init,
-          headers,
-          credentials: "same-origin",
-        });
-      },
+      auth: async () =>
+        (await getTokenRef.current().catch(() => null)) ??
+        tokenRef.current ??
+        undefined,
     });
   }, [getToken]);
+
+  useEffect(() => {
+    const interceptorId = client.interceptors.request.use(async (request) =>
+      attachBearerToRequest(
+        request,
+        async () =>
+          (await getTokenRef.current().catch(() => null)) ?? tokenRef.current,
+      ),
+    );
+
+    return () => {
+      client.interceptors.request.eject(interceptorId);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,7 +85,7 @@ export function TokenProvider({ children }: { children: ReactNode }) {
 
       if (!cancelled) {
         setError(
-          "Signed in, but no session token yet. If this persists in Firefox, allow clerk.accounts.dev (tracking protection), then sign out and back in.",
+          "Couldn't get a session token. In Firefox, allow clerk.accounts.dev under tracking protection, then sign out and back in.",
         );
         setReady(true);
       }

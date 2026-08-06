@@ -73,6 +73,61 @@ async def test_create_deck(client: AsyncClient):
   assert data["description"] == "test description"
   assert data["id"] is not None
 
+
+async def test_create_deck_with_discoverable(client: AsyncClient):
+  response = await client.post(
+    "/api/decks",
+    json={
+      "name": "public deck",
+      "description": "shared",
+      "discoverable": True,
+      "cards": [{"question": "Q", "answer": "A"}],
+    },
+  )
+  assert response.status_code == 200
+  assert response.json()["discoverable"] is True
+
+
+async def test_create_deck_rejects_empty_body(client: AsyncClient):
+  # Empty / missing body should be validation error (422), not 500.
+  response = await client.post("/api/decks", content=b"", headers={"Content-Type": "application/json"})
+  assert response.status_code == 422
+
+
+async def test_create_deck_requires_at_least_one_card(client: AsyncClient):
+  response = await client.post(
+    "/api/decks",
+    json={"name": "empty", "description": "", "cards": []},
+  )
+  assert response.status_code == 422
+
+
+async def test_upload_deck_csv(client: AsyncClient):
+  csv_bytes = b"What is git?,A VCS\nWhat is a commit?,A snapshot\n"
+  response = await client.post(
+    "/api/decks/upload",
+    data={
+      "deckName": "Uploaded",
+      "description": "from csv",
+      "discoverable": "true",
+    },
+    files={"file": ("deck.csv", csv_bytes, "text/csv")},
+  )
+  assert response.status_code == 200
+  body = response.json()
+  assert body["cardsCreated"] == 2
+  assert body["deckId"] is not None
+
+
+async def test_upload_deck_rejects_empty_csv(client: AsyncClient):
+  response = await client.post(
+    "/api/decks/upload",
+    data={"deckName": "Bad", "description": ""},
+    files={"file": ("empty.csv", b"\n\n", "text/csv")},
+  )
+  assert response.status_code == 400
+
+
 async def test_get_deck(session: AsyncSession, client: AsyncClient):
   deck = Deck(
     user_id=user_id,
