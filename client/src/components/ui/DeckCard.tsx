@@ -448,7 +448,7 @@ function formatTimeUntilNextReview(nextReviewDate: string | null) {
   const next = new Date(nextReviewDate + "Z").getTime();
   if (Number.isNaN(next)) return null;
   const seconds = Math.ceil((next - Date.now()) / 1000);
-  if (seconds <= 1) return null;
+  if (seconds <= 5) return null;
   if (seconds < 60) return formatTime(seconds, "second");
   const minutes = Math.ceil(seconds / 60);
   if (minutes < 60) return formatTime(minutes, "minute");
