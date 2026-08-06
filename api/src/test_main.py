@@ -73,6 +73,61 @@ async def test_create_deck(client: AsyncClient):
   assert data["description"] == "test description"
   assert data["id"] is not None
 
+
+async def test_create_deck_with_discoverable(client: AsyncClient):
+  response = await client.post(
+    "/api/decks",
+    json={
+      "name": "public deck",
+      "description": "shared",
+      "discoverable": True,
+      "cards": [{"question": "Q", "answer": "A"}],
+    },
+  )
+  assert response.status_code == 200
+  assert response.json()["discoverable"] is True
+
+
+async def test_create_deck_rejects_empty_body(client: AsyncClient):
+  # Empty / missing body should be validation error (422), not 500.
+  response = await client.post("/api/decks", content=b"", headers={"Content-Type": "application/json"})
+  assert response.status_code == 422
+
+
+async def test_create_deck_requires_at_least_one_card(client: AsyncClient):
+  response = await client.post(
+    "/api/decks",
+    json={"name": "empty", "description": "", "cards": []},
+  )
+  assert response.status_code == 422
+
+
+async def test_upload_deck_csv(client: AsyncClient):
+  csv_bytes = b"What is git?,A VCS\nWhat is a commit?,A snapshot\n"
+  response = await client.post(
+    "/api/decks/upload",
+    data={
+      "deckName": "Uploaded",
+      "description": "from csv",
+      "discoverable": "true",
+    },
+    files={"file": ("deck.csv", csv_bytes, "text/csv")},
+  )
+  assert response.status_code == 200
+  body = response.json()
+  assert body["cardsCreated"] == 2
+  assert body["deckId"] is not None
+
+
+async def test_upload_deck_rejects_empty_csv(client: AsyncClient):
+  response = await client.post(
+    "/api/decks/upload",
+    data={"deckName": "Bad", "description": ""},
+    files={"file": ("empty.csv", b"\n\n", "text/csv")},
+  )
+  assert response.status_code == 400
+
+
 async def test_get_deck(session: AsyncSession, client: AsyncClient):
   deck = Deck(
     user_id=user_id,
@@ -417,3 +472,39 @@ async def test_get_streak_counts_consecutive_qualifying_days(session: AsyncSessi
   assert data["todayReviewsCount"] == 3
   assert data["todayUniqueCardsCount"] == 3
   assert data["qualifiesToday"] == True
+
+
+async def test_get_study_activity_returns_days_in_range(
+  session: AsyncSession, client: AsyncClient
+):
+  today = datetime.utcnow().date()
+  older = today - timedelta(days=3)
+  session.add_all([
+    UserStudyDay(
+      user_id=user_id,
+      study_date=older,
+      reviews_count=2,
+      unique_cards_count=2,
+      qualifies_for_streak=False,
+    ),
+    UserStudyDay(
+      user_id=user_id,
+      study_date=today,
+      reviews_count=8,
+      unique_cards_count=8,
+      qualifies_for_streak=True,
+    ),
+  ])
+  await session.commit()
+
+  response = await client.get("/api/me/study-activity?weeks=4")
+  data = response.json()
+
+  assert response.status_code == 200
+  assert data["fromDate"] <= older.isoformat()
+  assert data["toDate"] == today.isoformat()
+  assert len(data["days"]) == 2
+  by_date = {row["date"]: row for row in data["days"]}
+  assert by_date[older.isoformat()]["reviewsCount"] == 2
+  assert by_date[today.isoformat()]["reviewsCount"] == 8
+  assert by_date[today.isoformat()]["qualifiesForStreak"] is True
