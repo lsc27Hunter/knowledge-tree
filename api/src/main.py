@@ -358,21 +358,32 @@ async def upload_deck(
   session.add(db_deck)
   await session.flush()
   deck_id = db_deck.id
-  file_text = (await file.read()).decode()
+
+  try:
+    file_text = (await file.read()).decode("utf-8")
+  except UnicodeDecodeError as exc:
+    raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded") from exc
+
   cards_created = 0
   for row in csv.reader(StringIO(file_text)):
     if len(row) != 2:
       continue
-    [question, answer] = row
-    db_card = Card(
+    question, answer = row[0].strip(), row[1].strip()
+    if not question and not answer:
+      continue
+    session.add(Card(
       deck_id=deck_id,
       question=question,
       answer=answer,
-    )
-    session.add(db_card)
-    await session.commit()
+    ))
     cards_created += 1
-  
+
+  if cards_created == 0:
+    await session.rollback()
+    raise HTTPException(status_code=400, detail="CSV has no valid prompt/answer rows")
+
+  await session.commit()
+
   return DeckUploadResponse(
     deck_id=deck_id,
     cards_created=cards_created,

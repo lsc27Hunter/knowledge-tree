@@ -283,6 +283,22 @@ class StreakResponse(APISchema):
   today_unique_cards_count: int
   minimum_cards_per_day: int
   qualifies_today: bool
+
+
+class StudyActivityDay(APISchema):
+  date: date
+  reviews_count: int
+  unique_cards_count: int
+  qualifies_for_streak: bool
+
+
+class StudyActivityResponse(APISchema):
+  # Inclusive UTC date range covered by `days` (missing days = no activity).
+  from_date: date
+  to_date: date
+  days: list[StudyActivityDay]
+
+
 class SettingsGet(APISchema):
   push_subscription: "PushSubscriptionData | None"
 
