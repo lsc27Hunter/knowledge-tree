@@ -16,22 +16,11 @@ export default defineConfig({
         target: `http://localhost:8000`,
         changeOrigin: true,
         secure: false,
-        configure: (proxy) => {
-          // Preserve the browser Host so FastAPI can match Clerk's azp claim
-          // when CLERK_AUTHORIZED_PARTIES fallback uses the request host.
-          proxy.on("proxyReq", (proxyReq, req) => {
-            const host = req.headers.host;
-            if (typeof host === "string" && host.length > 0) {
-              proxyReq.setHeader("X-Forwarded-Host", host);
-            }
-          });
-        },
       },
     },
-    watch: {
-      // Generated bindings; watching them causes noisy HMR mid-request.
-      ignored: ["**/src/api/**"],
-    },
+    // watch: {
+    //   ignored: "src/api"
+    // }
   },
 });
 

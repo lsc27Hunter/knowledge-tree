@@ -432,6 +432,20 @@ async def update_user_study_day(
   if row.unique_cards_count >= MINIMUM_CARDS_PER_DAY:
     row.qualifies_for_streak = True
 
+async def calculate_current_streak(session: AsyncSession, user_id: str) -> int:
+  today = datetime.utcnow().date()
+  qualifying_days = await _get_qualifying_days(session, user_id)
+  return _calculate_current_streak_with_grace(qualifying_days, today)
+
+async def _get_qualifying_days(session: AsyncSession, user_id: str) -> list[date]:
+  return list((await session.execute(
+    select(UserStudyDay.study_date)
+    .where(
+      UserStudyDay.user_id == user_id,
+      UserStudyDay.qualifies_for_streak.is_(True),
+    )
+    .order_by(UserStudyDay.study_date.asc())
+  )).scalars().all())
 
 def _calculate_current_streak_with_grace(qualifying_days: Sequence[date], today: date) -> int:
   if not qualifying_days:

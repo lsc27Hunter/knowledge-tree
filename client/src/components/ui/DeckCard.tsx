@@ -28,9 +28,10 @@ import {
   ModalHeaderShell,
   ModalShell,
   useModalState,
-  type ModalState,
 } from "./Modal";
 import { ExportDeckButton, ExportDiscoverableDeckButton} from "./ExportDeckButton";
+import DiscoveryMergeButton from "./DiscoveryMergeButton";
+import DiscoveryMergeModalContent from "./DiscoveryMergeModal";
 
 interface DeckCardProps {
   deckData: Deck;
@@ -58,7 +59,7 @@ export function DeckCard({
   isDiscoveryPage = false,
   onChanged,
 }: DeckCardProps & { isDiscoveryPage?: boolean }) {
-  const previewModalState = useModalState();
+  const previewModalState = usePreviewModalState();
   const deleteModalState = useModalState();
   const [isDeleting, setIsDeleting] = useState(false);
   const deckId = deckData.id;
@@ -198,7 +199,7 @@ export function DeckCard({
       ) : null}
 
       {isDiscoveryPage ? (
-        <PreviewModal deckId={deckId} modalState={previewModalState} />
+        <PreviewModal deckId={deckId} deckName={deckData.name} modalState={previewModalState}  />
       ) : (
         <ConfirmDialog
           state={deleteModalState}
@@ -216,24 +217,42 @@ export function DeckCard({
 
 function PreviewModal({
   deckId,
+  deckName,
   modalState,
 }: {
   deckId: number;
-  modalState: ModalState;
+  deckName: string;
+  modalState: PreviewModalState;
 }) {
+  const size = modalState.page === "merge" ? "xl" : "lg";
   return (
-    <ModalShell state={modalState} size="lg">
-      <PreviewContent deckId={deckId} onClose={modalState.close} />
+    <ModalShell state={modalState} size={size}>
+      <PageSwitch deckId={deckId} deckName={deckName} modalState={modalState} />
     </ModalShell>
   );
+}
+
+interface PageSwitchProps {
+  deckId: number;
+  deckName: string;
+  modalState: PreviewModalState;
+}
+
+function PageSwitch({ deckId, deckName, modalState }: PageSwitchProps) {  
+  switch (modalState.page) {
+    case "preview": return (<PreviewContent deckId={deckId} onClose={modalState.close} gotoMerge={modalState.gotoMerge} />);
+    case "merge": return (<DiscoveryMergeModalContent deckId={deckId} deckName={deckName} modalState={modalState} />);
+  }
 }
 
 function PreviewContent({
   deckId,
   onClose,
+  gotoMerge,
 }: {
   deckId: number;
   onClose(): void;
+  gotoMerge(): void;
 }) {
   const navigate = useNavigate();
   const [deck, setDeck] = useState<DeckGetResponse | null>(null);
@@ -369,13 +388,17 @@ function PreviewContent({
       </ModalBody>
       {deck ? (
         <ModalFooter>
-          <div className="w-full flex justify-end items-center gap-2">
-            <ExportDiscoverableDeckButton deckId={deckId} />
+          <div className="w-full flex flex-wrap justify-end items-center gap-2">
+            <div className="flex sm:w-fit w-full sm:justify-end justify-around gap-2">
+              <ExportDiscoverableDeckButton deckId={deckId} />
+              <DiscoveryMergeButton gotoMerge={gotoMerge} />
+            </div>
             <Button
               text={isSaving ? "Adding…" : "Add To My Dashboard"}
               color="accent"
               textColor="white"
               disabled={isSaving}
+              width="full-on-mobile"
               onClick={() => {
                 void addToDashboard();
               }}
@@ -398,6 +421,26 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
+}
+
+type PreviewModalState = ReturnType<typeof usePreviewModalState>;
+type Page = "preview" | "merge";
+
+export function usePreviewModalState() {
+  const [page, setPage] = useState<Page>("preview");
+  const modalState = useModalState({
+    onClose() {
+      setPage("preview");
+    }
+  });
+  function gotoMerge() {
+    setPage("merge");
+  }
+  return {
+    ...modalState,
+    page,
+    gotoMerge,
+  };
 }
 
 function formatTimeUntilNextReview(nextReviewDate: string | null) {
