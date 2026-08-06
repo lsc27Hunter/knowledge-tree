@@ -4,8 +4,9 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Header, status
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import NotificationConditions, NotificationConditionsDefaults, PushSubscription, Settings, SettingsGet, SettingsGetResponse, SettingsUpdate, SettingsUpdateResponse
+from models import NotificationConditions, NotificationConditionsDefaults, PushSubscription, PushSubscriptionData, Settings, SettingsGet, SettingsGetResponse, SettingsUpdate, SettingsUpdateResponse
 from auth import CurrentUserId
 from db import SessionDep
 
@@ -18,17 +19,7 @@ async def get_settings(
   session: SessionDep,
   user_id: CurrentUserId,
 ):
-  push_subscription = body.push_subscription
-  is_subscribed = False if push_subscription is None else (
-    (await session.execute(
-      select(PushSubscription)
-      .where(
-        PushSubscription.endpoint == push_subscription.endpoint,
-        PushSubscription.keys_p256dh == push_subscription.keys.p256dh,
-        PushSubscription.keys_auth == push_subscription.keys.auth,
-      )
-    )).scalar_one_or_none() is not None
-  )
+  is_subscribed = await get_is_subscribed(session, body.push_subscription)
   settings = (await session.execute(
     select(Settings)
     .where(Settings.user_id == user_id)
@@ -55,6 +46,8 @@ async def update_settings(
 ):
   if host is None:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Host header not found")
+
+  # Insert the new settings or update the old settings.
   insert_ = insert(Settings).values(
     user_id=user_id,
     notification_time=settings.notification_time,
@@ -83,13 +76,14 @@ async def update_settings(
     )
     .returning(Settings.id)
   )).scalar()
+
   assert settings_id is not None
   if settings.notifications_enabled:
     if settings.push_subscription is None:
       raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Push subscription required if notifications enabled")
     subscription = settings.push_subscription
 
-    # Insert if doesn't exist.
+    # Insert the push subcription if doesn't exist already.
     await session.execute(
       insert(PushSubscription)
       .values(
@@ -106,6 +100,7 @@ async def update_settings(
   else:
     if settings.push_subscription is None:
       return SettingsUpdateResponse(push_subscription_result="nothing to delete")
+    # Delete the push subscription from the database.
     subscription = settings.push_subscription
     db_subscription = (await session.execute(
       select(PushSubscription)
@@ -122,3 +117,16 @@ async def update_settings(
     await session.execute(delete(PushSubscription).where(PushSubscription.id == db_subscription.id))
     await session.commit()
     return SettingsUpdateResponse(push_subscription_result="deleted")
+
+async def get_is_subscribed(session: AsyncSession, push_subscription: PushSubscriptionData | None) -> bool:
+  """A user is subscribed if they have a push subscription that is stored in the database."""
+  return False if push_subscription is None else (
+    (await session.execute(
+      select(PushSubscription)
+      .where(
+        PushSubscription.endpoint == push_subscription.endpoint,
+        PushSubscription.keys_p256dh == push_subscription.keys.p256dh,
+        PushSubscription.keys_auth == push_subscription.keys.auth,
+      )
+    )).scalar_one_or_none() is not None
+  )

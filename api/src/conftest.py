@@ -32,9 +32,9 @@ user_id = "test_user_id"
 def anyio_backend():
   return "asyncio"
 
-# Initialize and connect to postgres running in Docker.
 @pytest.fixture(name="engine", scope="session")
 async def engine_fixture():
+  """Initialize and connect to postgres running in Docker."""
   with PostgresContainer("postgres:16", driver="asyncpg") as postgres:
     engine = create_async_engine(postgres.get_connection_url())
     async with engine.begin() as conn:
@@ -42,10 +42,10 @@ async def engine_fixture():
       
     yield engine
 
-# Provide a session that rolls back database changes after each test.
 # https://docs.sqlalchemy.org/en/21/orm/session_transaction.html#joining-a-session-into-an-external-transaction-such-as-for-test-suites
 @pytest.fixture(name="session")
 async def session_fixture(engine: AsyncEngine):
+  """Provide a session that rolls back database changes after each test."""
   async with engine.connect() as connection:
     transaction = await connection.begin()
     

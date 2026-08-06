@@ -27,6 +27,7 @@ async def send_notifications(
   _: CheckNotificationsSecret,
   host: Host,
 ):
+  """Called by a cron job to send notifications to all users who are scheduled for them."""
   return await send_notifications_helper(
     session=session,
     host=host,
@@ -39,6 +40,10 @@ async def send_test_notifications(
   _: CheckNotificationsSecret,
   host: Host,
 ):
+  """
+  Testing-only. Send a notification to all users according to their settings but
+  regardless of their scheduled time for notifications.
+  """
   return await send_notifications_helper(
     session=session,
     host=host,
@@ -51,22 +56,23 @@ async def send_notifications_helper(
   scheduled: bool,
 ) -> SendNotificationsResponse:
   sub = get_sub(host)
-
   hour = datetime.utcnow().hour
+
+  # The start and end of the hour.
   t0 = time(hour=hour)
   t1 = time.max.replace(hour=hour)
 
   sent = 0
   expired_or_invalid = 0
 
+  # The settings of each user whose notification time is set within this hour.
   settings_query = (
     select(Settings).where(Settings.notification_time >= t0, Settings.notification_time <= t1)
   ) if scheduled else select(Settings)
 
-  # Settingses - the plural of settings.
-  settingses = (await session.execute(settings_query)).scalars().all()
+  settings_list = (await session.execute(settings_query)).scalars().all()
 
-  for settings in settingses:
+  for settings in settings_list:
     push_subscriptions = (await session.execute(
       select(PushSubscription)
       .where(PushSubscription.settings_id == settings.id, PushSubscription.host == host)
@@ -113,6 +119,7 @@ async def send_test_notification(
   body: SendTestNotification,
   host: Host,
 ):
+  """Allow the user to see what kind of notification will come from their current notification settings."""
   sub = get_sub(host)
   subscription = body.push_subscription
 
@@ -132,6 +139,10 @@ async def send_test_notification(
 async def handle_test_notification_response(
   subscription: "PushSubscriptionData | None",
 ):
+  """
+  When the client receives a push message, it can respond to this endpoint to prove delivery.
+  Used only for testing.
+  """
   log.info(f"Received test notification response: {subscription}")
 
 async def send_push_message(
@@ -164,6 +175,7 @@ async def get_notification_deck_names(
   user_id: str,
   notification_conditions: NotificationConditions,
 ) -> tuple[set[str], bool, int]:
+  """The deck names that could possibly appear in the notification."""
   sequences: list[Sequence[str]] = []
   streak = await calculate_current_streak(session, user_id)
   if notification_conditions.streak.enabled:
@@ -172,6 +184,8 @@ async def get_notification_deck_names(
     streak_condition = False
 
   if streak_condition:
+    # If we're notifying the user about a streak, we'll just tell them about all the decks ready
+    # for review, even if they don't strictly fit the user's notification settings.
     sequence = (await session.execute(
       select(Deck.name)
       .join(Card, Card.deck_id == Deck.id)
@@ -181,6 +195,7 @@ async def get_notification_deck_names(
     sequences.append(sequence)
   else:
     if notification_conditions.deck.enabled:
+      # All decks with a given number of cards that have been due for a given number of days.
       sequence = (await session.execute(
         select(Deck.name)
         .join(Card, Card.deck_id == Deck.id)
@@ -190,6 +205,7 @@ async def get_notification_deck_names(
       )).scalars().all()
       sequences.append(sequence)
     if notification_conditions.card.enabled:
+      # All decks with any card that has been due for a given number of days.
       sequence = (await session.execute(
         select(Deck.name)
         .join(Card, Card.deck_id == Deck.id)
@@ -216,9 +232,17 @@ def get_notification_message(deck_names: set[str], streak_condition: bool, strea
     )
 
 def get_notification_body(deck_names: set[str], streak_condition: bool) -> str:
+  """
+  The body mentions a random deck to review and the number of other decks that also fit the
+  notification criteria.
+  """
   random_deck_name = random.choice(list(deck_names))
   others = len(deck_names) - 1
+
+  # When we notify the user about a streak, we just include all decks that can be reviewed, even
+  # if they do not fit the notification criteria. So we use the word "ready" instead of "due".
   adj = "ready" if streak_condition else "due"
+
   if others == 0:
     return f"'{random_deck_name}' is {adj}."
   else:
@@ -233,15 +257,26 @@ def get_notification_title(streak_condition: bool, streak: int) -> str:
 def check_notifications_secret(
   credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ):
+  """
+  Check the HTTP bearer token against the notifications secret to ensure only trusted parties can
+  trigger notifications.
+
+  The notifications cron job must supply this secret.
+  """
   if credentials is None or credentials.credentials != notifications_secret:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 def get_host(host: Annotated[str | None, Header()] = None):
+  """The host header of the request."""
   if host is None:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Host header not found")
   return host
 
 def get_sub(host: str):
+  """
+  The 'sub' value of the vapid claims required by web push; where web push errors should be reported to.
+  We simply use our site url.
+  """
   if host.startswith("localhost:"):
     return "https://localhost"
   else:

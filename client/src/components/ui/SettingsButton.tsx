@@ -74,22 +74,6 @@ export function SettingsModal({ modalState }: { modalState: ModalState }) {
   );
 }
 
-function utcFromLocal(local: string) {
-  const localSplit = local.split(":");
-  const date = new Date();
-  date.setHours(parseInt(localSplit[0]));
-  date.setMinutes(parseInt(localSplit[1]));
-  return date.getUTCHours().toString().padStart(2, "0") + ":" + date.getUTCMinutes().toString().padStart(2, "0");
-}
-
-function localFromUtc(utc: string) {
-  const utcSplit = utc.split(":");
-  const date = new Date();
-  date.setUTCHours(parseInt(utcSplit[0]));
-  date.setUTCMinutes(parseInt(utcSplit[1]));
-  return date.getHours().toString().padStart(2, "0") + ":" + date.getMinutes().toString().padStart(2, "0");
-}
-
 interface NotificationsState {
   checked: boolean;
   denied: boolean;
@@ -101,6 +85,10 @@ type NotificationsStatus = "checked" | "unchecked" | "denied";
 function useNotificationsState(isSubscribedOnServer: boolean): NotificationsState {
   const [status, setStatus] = useState<NotificationsStatus>("unchecked");
   useEffect(() => {
+    // We only consider notifications to be enabled if the user has granted notification
+    // permission and their push subscription exists on the server.
+    // If the user grants notification permission through their browser, we'll still wait for them
+    // to check the notifications checkbox so we can save their push subscription on the server.
     if (isSubscribedOnServer) {
       setStatus(Notification.permission === "granted" ? "checked" : "unchecked");
     } else {
@@ -111,7 +99,10 @@ function useNotificationsState(isSubscribedOnServer: boolean): NotificationsStat
     if (checked) {
       try {
         if (Notification.permission === "granted") {
+          // Check if permission was already granted so we don't show a pop-up pretending that
+          // permission was only just granted.
           setStatus("checked");
+          await subscribe();
           return;
         }
 
@@ -121,6 +112,9 @@ function useNotificationsState(isSubscribedOnServer: boolean): NotificationsStat
           await subscribe();
           toast.success("Notifications permitted");
         } else {
+          // User tried checking the checkbox but notification permission was still not granted.
+          // They may have declined on the browser prompt or their browser chose not to show it
+          // since they declined or ignored the prompt in the past.
           setStatus("denied");
           toast.error("Notifications blocked", {
             description: "You can change this in your browser settings.",
@@ -140,26 +134,6 @@ function useNotificationsState(isSubscribedOnServer: boolean): NotificationsStat
     requestChange,
   };
 }
-
-// function Notifications({ state, validateNotificationConditions }: NotificationsProps) {
-//   return (
-//     <div className="font-inter flex flex-col">
-//       {areNotificationsSupported() ?
-//         <div className="flex flex-col w-full">
-//           <div className="flex items-baseline mt-4">
-//           <div className="flex items-center text-white gap-x-3">
-//             <div>Notifications</div>
-//             <NotificationsCheckbox state={state} />
-//           </div>
-//           <TestNotificationsButton className="ml-6" disabled={!state.checked} validateNotificationConditions={validateNotificationConditions} />
-//           </div>
-//           {state.denied && <div className="text-gray-500">Permission was not granted. You may need to grant permission through your browser.</div>}
-//         </div> :
-//         <div className="font-bold mt-4">Your browser does not support notifications.</div>
-//       }
-//     </div>
-//   );
-// }
 
 function AppearanceSection() {
   const { theme, setTheme } = useTheme();
@@ -457,8 +431,21 @@ interface NotificationsCheckboxProps {
 }
 
 function NotificationsCheckbox({ state }: NotificationsCheckboxProps) {
+  const id = "notifications";
   return (
-    <Toggle checked={state.checked} onChange={state.requestChange} id="notifications" />
+    <label
+      htmlFor={id}
+      className="flex min-h-11 cursor-pointer items-center gap-2 type-caption font-semibold text-primary-light-grey"
+    >
+      <input
+        id={id}
+        type="checkbox"
+        className="h-5 w-5 accent-accent"
+        checked={state.checked}
+        onChange={(e) => state.requestChange(e.target.checked)}
+      />
+      Notifications
+    </label>
   );
 }
 
@@ -486,32 +473,6 @@ function Notifications({ state, validateNotificationConditions }: NotificationsP
   );
 }
 
-export function Toggle({
-  checked,
-  onChange,
-  id,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  id?: string;
-}) {
-  return (
-    <label
-      htmlFor={id}
-      className="flex min-h-11 cursor-pointer items-center gap-2 type-caption font-semibold text-primary-light-grey"
-    >
-      <input
-        id={id}
-        type="checkbox"
-        className="h-5 w-5 accent-accent"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      Notifications
-    </label>
-  );
-}
-
 interface TestNotificationsButtonProps {
   className: string;
   disabled: boolean;
@@ -526,7 +487,9 @@ function TestNotificationsButton({
   validateNotificationConditions,
 }: TestNotificationsButtonProps) {
   async function onClick() {
+    // Ensure the user is subscribed so they can receive this test notification.
     const { subscription, newlySubscribed } = await subscribeGeneric();
+
     const validationResult = validateNotificationConditions();
     if (validationResult === null) return;
     const res = await sendTestNotification({
@@ -536,6 +499,7 @@ function TestNotificationsButton({
       },
     });
     if (newlySubscribed) {
+      // We subscribed the user just for this test - unsubscribe them after.
       await subscription.unsubscribe();
     }
     if (res.error) {
@@ -563,6 +527,24 @@ interface ValidatedNotificationConditions {
     enabled: boolean;
     days: number;
   };
+}
+
+/** Convert a local time string to a UTC string, both of the form hh:mm (24-hour). */
+function utcFromLocal(local: string) {
+  const localSplit = local.split(":");
+  const date = new Date();
+  date.setHours(parseInt(localSplit[0]));
+  date.setMinutes(parseInt(localSplit[1]));
+  return date.getUTCHours().toString().padStart(2, "0") + ":" + date.getUTCMinutes().toString().padStart(2, "0");
+}
+
+/** Convert a UTC string to a local time string, both of the form hh:mm (24-hour). */
+function localFromUtc(utc: string) {
+  const utcSplit = utc.split(":");
+  const date = new Date();
+  date.setUTCHours(parseInt(utcSplit[0]));
+  date.setUTCMinutes(parseInt(utcSplit[1]));
+  return date.getHours().toString().padStart(2, "0") + ":" + date.getMinutes().toString().padStart(2, "0");
 }
 
 function areNotificationsSupported() {
@@ -615,7 +597,6 @@ async function unsubscribe() {
   if (!subscription) {
     return null;
   }
-  // TODO: error check
   await subscription.unsubscribe();
   return subscription;
 }

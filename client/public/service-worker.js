@@ -1,3 +1,7 @@
+// This service worker is a script that runs in the user's browser even when our app isn't running.
+// Service workers can receive "push" messages from a web push service. In our case, these messages
+// tell the service worker to display a notification.
+
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {any} */ (self));
 
 // If the service worker was updated, switch to the updated version immediately.
@@ -27,6 +31,7 @@ sw.addEventListener("push", e => {
     ));
   }
 
+  // Notify the server that this message was received - used for debugging only.
   // e.waitUntil((async () => {
   //   const subscription = await sw.registration.pushManager.getSubscription();
   //   await fetch("/api/notifications/test-response", {
